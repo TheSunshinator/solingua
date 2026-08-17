@@ -1,0 +1,5 @@
+/.idea
+
+# Compiled binaries from examples (everything except .sol source files)
+examples/*
+!examples/*.sol
