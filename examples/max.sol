@@ -1,8 +1,8 @@
 max -> {
     parameters(
-        a,
+        a
             is value, type Integer,
-        b,
+        b
             is value, type Integer,
     )
     return if {
@@ -10,11 +10,11 @@ max -> {
         else -> b
     }
 }
-    is function, returns Integer
+    is function, returns Integer,
 
 main -> {
     result -> max(5, 3)
-        is value, type Integer
+        is value, type Integer,
     printLine(result)
 }
-    is function, returns nothing
+    is function, returns nothing,

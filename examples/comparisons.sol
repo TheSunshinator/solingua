@@ -1,10 +1,10 @@
 getMedian -> {
     parameters(
-        a,
+        a
             is value, type Integer,
-        b,
+        b
             is value, type Integer,
-        c,
+        c
             is value, type Integer,
     )
     return if {
@@ -20,11 +20,11 @@ getMedian -> {
         }
     }
 }
-    is function, returns Integer
+    is function, returns Integer,
 
 main -> {
     result -> getMedian(5, 3, 8)
-        is value, type Integer
+        is value, type Integer,
     printLine(result)
 }
-    is function, returns nothing
+    is function, returns nothing,
