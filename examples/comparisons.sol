@@ -25,6 +25,6 @@ getMedian -> {
 main -> {
     result -> getMedian(5, 3, 8)
         is value, type Integer
-    printInteger(result)
+    printLine(result)
 }
     is function, returns nothing

@@ -112,7 +112,7 @@ return if {
 Used for conditional side effects. No `else` needed:
 
 ```
-if x > 5 -> printInteger(x)
+if x > 5 -> printLine(x)
 ```
 
 ### Comparison operators
@@ -123,8 +123,7 @@ if x > 5 -> printInteger(x)
 
 | Function | Description |
 |----------|-------------|
-| `printLine(value)` | Prints a string followed by a newline |
-| `printInteger(value)` | Prints an integer followed by a newline |
+| `printLine(value)` | Prints a value followed by a newline. Accepts both String and Integer. |
 
 ## Examples
 

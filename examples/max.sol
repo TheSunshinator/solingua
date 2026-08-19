@@ -15,6 +15,6 @@ max -> {
 main -> {
     result -> max(5, 3)
         is value, type Integer
-    printInteger(result)
+    printLine(result)
 }
     is function, returns nothing

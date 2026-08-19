@@ -1,9 +1,9 @@
 main -> {
     x -> 9
         is value, type Integer
-    if x > 5 -> printInteger(
+    if x > 5 -> printLine(
         x
     )
-    printInteger(99)
+    printLine(99)
 }
     is function, returns nothing
