@@ -1,11 +1,11 @@
 getMedian -> {
     parameters(
         a
-            is value, type Integer,
+            is value, type Integer, local scope,
         b
-            is value, type Integer,
+            is value, type Integer, local scope,
         c
-            is value, type Integer,
+            is value, type Integer, local scope,
     )
     return if {
         a < b -> if {
@@ -20,11 +20,11 @@ getMedian -> {
         }
     }
 }
-    is function, returns Integer,
+    is function, returns Integer, local scope,
 
 main -> {
     result -> getMedian(5, 3, 8)
-        is value, type Integer,
+        is value, type Integer, local scope,
     printLine(result)
 }
-    is function, returns nothing,
+    is function, returns nothing, local scope,

@@ -1,6 +1,6 @@
 main -> {
     greeting -> "Hello world!"
-        is value, type String,
+        is value, type String, local scope,
     printLine(greeting)
 }
-    is function, returns nothing,
+    is function, returns nothing, local scope,

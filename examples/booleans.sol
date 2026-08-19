@@ -1,8 +1,8 @@
 main -> {
     a -> true
-        is value, type Boolean,
+        is value, type Boolean, local scope,
     b -> false
-        is value, type Boolean,
+        is value, type Boolean, local scope,
 
     printLine(a)
     printLine(b)
@@ -12,8 +12,8 @@ main -> {
     printLine(not b)
 
     x -> 7
-        is value, type Integer,
+        is value, type Integer, local scope,
     printLine(x > 5 and x < 10)
     printLine(x > 10 or x < 3)
 }
-    is function, returns nothing,
+    is function, returns nothing, local scope,
