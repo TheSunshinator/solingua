@@ -1,11 +1,12 @@
 Red
-   is singleton
+    is singleton
 Green
-   is singleton
+    is singleton
 Blue
-   is singleton
+    is singleton
 
 main -> {
+    parameters()
     color -> Red
         is value, type Color, local scope,
 

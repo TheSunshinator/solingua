@@ -11,6 +11,7 @@ factorial -> {
     is function, returns Integer, local scope,
 
 main -> {
+    parameters()
     printLine(factorial(15))
 }
     is function, returns nothing, local scope,

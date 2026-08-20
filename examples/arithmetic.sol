@@ -1,4 +1,5 @@
 main -> {
+    parameters()
     a -> 10
         is value, type Integer, local scope,
     b -> 3

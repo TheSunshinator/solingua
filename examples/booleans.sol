@@ -1,4 +1,5 @@
 main -> {
+    parameters()
     a -> true
         is value, type Boolean, local scope,
     b -> false

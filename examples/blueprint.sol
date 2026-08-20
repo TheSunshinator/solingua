@@ -3,15 +3,19 @@ Cat -> {
         name,
             is value, type String, instance scope,
     )
-    speak -> { printLine("Meow") }
+    speak -> {
+        parameters()
+        printLine("Meow")
+    }
         is function, returns nothing, instance scope,
 }
     is blueprint,
 
 main -> {
+    parameters()
     cat -> Cat("Whiskers")
         is value, type Cat, local scope,
     cat.speak()
     printLine(cat.name)
 }
-    is function, returns nothing,
+    is function, returns nothing, local scope,

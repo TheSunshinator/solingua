@@ -23,6 +23,7 @@ getMedian -> {
     is function, returns Integer, local scope,
 
 main -> {
+    parameters()
     result -> getMedian(5, 3, 8)
         is value, type Integer, local scope,
     printLine(result)
