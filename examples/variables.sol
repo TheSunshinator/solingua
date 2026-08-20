@@ -4,4 +4,4 @@ main -> {
         is value, type String, local scope,
     printLine(greeting)
 }
-    is function, returns nothing, local scope,
+    is function, returns nothing, project scope,

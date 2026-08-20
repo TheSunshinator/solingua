@@ -17,4 +17,4 @@ main -> {
     printLine(x > 5 and x < 10)
     printLine(x > 10 or x < 3)
 }
-    is function, returns nothing, local scope,
+    is function, returns nothing, project scope,

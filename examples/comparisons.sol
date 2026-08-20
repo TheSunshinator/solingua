@@ -20,7 +20,7 @@ getMedian -> {
         }
     }
 }
-    is function, returns Integer, local scope,
+    is function, returns Integer, project scope,
 
 main -> {
     parameters()
@@ -28,4 +28,4 @@ main -> {
         is value, type Integer, local scope,
     printLine(result)
 }
-    is function, returns nothing, local scope,
+    is function, returns nothing, project scope,

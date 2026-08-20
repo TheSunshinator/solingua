@@ -14,4 +14,4 @@ main -> {
     printLine(color = Green)
     printLine(color = Blue)
 }
-    is function, returns nothing, local scope,
+    is function, returns nothing, project scope,

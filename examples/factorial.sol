@@ -8,10 +8,10 @@ factorial -> {
         else -> n * factorial(n - 1)
     }
 }
-    is function, returns Integer, local scope,
+    is function, returns Integer, project scope,
 
 main -> {
     parameters()
     printLine(factorial(15))
 }
-    is function, returns nothing, local scope,
+    is function, returns nothing, project scope,
