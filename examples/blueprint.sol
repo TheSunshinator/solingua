@@ -9,7 +9,7 @@ Cat -> {
     }
         is function, returns nothing, instance scope,
 }
-    is blueprint,
+    is blueprint, full implementation,
 
 main -> {
     parameters()
