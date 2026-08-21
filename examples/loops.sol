@@ -1,11 +1,10 @@
 main -> {
-    parameters()
-    for i from 0 to 5 -> {
-        printLine(i)
-    }
-        exclude last,
+    counter -> 0
+        is variable, type Integer, local scope,
 
-    for i from 1 to 5 -> printLine(i * i)
-        include last,
+    while counter < 10 {
+        printLine(counter)
+        counter ~~> counter + 1
+    }
 }
     is function, returns nothing, project scope,
