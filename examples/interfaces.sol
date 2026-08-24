@@ -1,10 +1,10 @@
 Animal -> {
     name
-        is value, type String, instance scope
+        is value, type String, instance scope,
     speak -> {
         parameters()
     }
-        is function, returns nothing, instance scope
+        is function, returns nothing, instance scope,
 }
     is blueprint, declared implementation,
 
