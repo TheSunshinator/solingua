@@ -1,17 +1,20 @@
-factorial -> {
-    parameters(
-        n
-            is value, type Integer, local scope,
-    )
-    return if {
-        n = 0 -> 1
-        else -> n * factorial(n - 1)
+let function factorial {
+    labels[return(Integer), generics[], mutable(false), visibility(public),
+        scope(project), implementation(full), ]
+
+    parameters {
+        let n value {
+            labels[return(Integer), mutable(false), scope(local), implementation(full), ]
+        }
+    }
+    body {
+        return if n = 0 then 0 else factorial(n - 1);
     }
 }
-    is function, returns Integer, project scope,
 
-main -> {
-    parameters()
-    printLine(factorial(15))
+let function main {
+    labels[return(), generics[], mutable(false), visibility(public),
+        scope(project), implementation(full), ]
+    parameters{}
+    body { printLine(factorial(15)); }
 }
-    is function, returns nothing, project scope,

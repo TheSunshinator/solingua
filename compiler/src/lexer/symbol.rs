@@ -5,6 +5,7 @@ pub enum Symbol {
     Dot,
     Arithmetic(Arithmetic),
     Brace(Bound),
+    Bracket(Bound),
     Parentheses(Bound),
 }
 
@@ -27,6 +28,8 @@ impl Symbol {
         match character {
             '{' => Some(Symbol::Brace(Bound::Opening)),
             '}' => Some(Symbol::Brace(Bound::Closing)),
+            '[' => Some(Symbol::Bracket(Bound::Opening)),
+            ']' => Some(Symbol::Bracket(Bound::Closing)),
             '(' => Some(Symbol::Parentheses(Bound::Opening)),
             ')' => Some(Symbol::Parentheses(Bound::Closing)),
             ',' => Some(Symbol::Comma),

@@ -42,85 +42,257 @@ solingua --verbose <source.sol>
 
 Prints the full compilation pipeline: lexer output, abstract syntax tree, and generated assembly.
 
+## Definitions
+Here is a table with some definition of the meaning of some words in the context of Solingua
+
+| Word | Definition |
+| :---: | :--- |
+| Construct | Anything that can be declared in the language. A value, a function, a type, etc |
+| Folder | Refering to folders in the file system |
+| package | All files that are going to be compiled together in a single binary |
+
+
 ## Language Guide
+### Identifiers
+Grammar:
+```
+digit                  = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+letter                 = "a"..."z" | "A"..."Z" ;
+identifier             = letter , { letter | digit | "_" } ;
+typeIdentifier         = identifier , ("<" , identifier , ("," , identifier)* , ">") ;
+genericTypeIdentifiers = identifier , ("return[" , typeIdentifier , ("&" , typeIdentifier)* , "]" ;
+```
+
+### Labels
+Labels are places after a declaration, separated by commas. They should appear in the following order.
+Some are optional depending on the context
+- return
+- generic
+- mutable
+- visibility
+- scope
+- implementation
+- contract
+
+Grammar: 
+```
+labels = "labels[" , (identifier , labelParameters)*, "]" ;
+labelParameters = labelParameterList | labelStandardParameter ;
+labelStandardParameter = "(" , identifier , ")" ;
+labelParameterList = "[" , identifier , "]" ;
+```
+
+#### return
+Required label used to associate a (return) type to a construct. For values, it _must_ include a type; It cannot be empty.
+
+| Construct |            Meaning            |
+|:---------:|:-----------------------------:|
+|   value   |       Type of the value       |
+| function  | Type returned by the function |
+|   type    |   Parent type and contracts   |
+
+Grammar: `returnLabel = "return(" , (typeIdentifier), "), " ;`
+
+Examples: 
+```
+labels[return(), …]
+labels[return(Integer), …]
+```
+
+#### generic
+
+Label required for types and functions constructs declaring generic types that they use.
+
+Grammar:
+```
+genericLabel = "generic(" , (genericTypeIdentifiers , ("," , genericTypeIdentifiers)*) , "), " ;
+```
+
+Example: 
+```
+labels[…, generic[], …]
+labels[…, generic[T], …]
+labels[…, generic[T, U], …]
+labels[…, generic[T return ViewModel, U], …]
+labels[…, generic[T return ViewModel & Listener, U], …]
+```
+
+#### mutable
+Required label that denotes a construct that can be mutated or not. On a function, it means that it can or cannot be overridden. 
+
+| Construct |          Meaning           |
+|:---------:|:--------------------------:|
+|   value   |  Value can be reassigned   |
+| function  | Function can be overridden |
+|   type    |    Type can be extended    |
+
+Grammar: `mutabilityLabel = "mutable(" , ("true" | "false") , "), " ;`
+
+Example:
+```
+let value counter {
+  labels[return(String), mutable(true), …]
+  initially(0)
+}
+
+counter becomes counter + 1
+
+let value greeting {
+  labels[return(String), mutable(false), …]
+  initially("Hello world!")
+}
+
+```
+
+#### visibility
+Required for any construct defined directly in a file, and instance scoped declarations,
+it defined what other constructs can access this one.
+
+| Visibility | Meaning                                                                                                                                                                                    |
+|:----------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|  private   | For constructs declared directly in files, it can only be accessed by other construct in that file.<br/>For constructs in a type construct, it can only be accessed from within that type. |
+|   public   | No restriction                                                                                                                                                                             |
+|   folder   | Can be accessed from any construct defined in the same folder                                                                                   Type can be extended                       |
+| subfolders | Can be accessed from any construct defined in the same folder or subfolders                                                                                                                |
+|  package   | Can only be accessed from within this package                                                                                                                                              |
+|  contract  | Can only be accessed from child types                                                                                                                                                      |
+
+Grammar: `visibilityLabel = "visibility(" , { "private" | "public" | "folder" | "subfolders" | "package" | "contract" } , "), " ;`
+
+Example: ```labels[…, visibility(public), …]```
+
+#### scope
+Required for all declarations, used to determine the scope of the declaration.
+
+|  Scope   | Meaning                                       |
+|:--------:|-----------------------------------------------|
+| project  | Top-level, not tied to anything               |
+|  local   | Only exist in the immediate surrounding block |
+| instance | Tied to an instance of a type                 |
+|   type   | Tied to a type identifier                     |
+
+Grammar: `scopeLabel = "scope(" , { "instance" | "local" | "project" | "type" } , "), " ;`
+
+Example: ```labels[…, scope(local), …]```
+
+#### implementation
+Required for constructs with a `scope(instance)`. Used to determine at what degree the construct is implemented
+
+| Implementation | Meaning                                                                                              |
+|:--------------:|------------------------------------------------------------------------------------------------------|
+|      full      | The construct is fully implemented                                                                   |
+|    partial     | The construct is partially implemented, either unfinished or mixes full/no implementation constructs |
+|      none      | The construct is declared, but provides no implementation                                            |
+|   inherited    | The construct is declared, but provides no implementation. The ancestor does and is unchanged.       |
+
+Grammar: `implementationLabel = "implementation(" , { "full" | "partial" | "none" } , "), " ;`
+
+Example: ```labels[…, implementation(partial), …]```
+
+#### contract
+Required for constructs with a `scope(instance)`. Used to determine if a construct is required by contract, or it's a new construct
+
+Grammar: `contractLabel = "contract(" , typeIdentifier , "), " ;`
+
+Example: ```labels[…, contract(Listener), …]```
+
+### Parameters
+Defined parameters for a function or a type constructor
+
+Grammar:
+```
+parameterList = "parameters {" , parameter* , "}" ;
+parameter = valueDefinition | functionDefinition
+```
 
 ### Functions
 
+Grammar:
 ```
-main -> {
-    parameters()
-    printLine("Hello world!")
+"let function " , identifier , "{" ,
+  labels ,
+  parameterList ,
+  "body {" , statement* , "}"
+"}" ;
+```
+
+Examples:
+```
+let function main {
+    labels[return(), generics[], mutable(false), visibility(public),
+        scope(project), implementation(full), ]
+    parameters{}
+    body { printLine("Hello world!"); }
 }
-    is function, returns nothing, project scope,
-```
 
-Every function is annotated with `is function, returns T, SCOPE scope,`. Functions with parameters:
-
-```
-max -> {
-    parameters(
-        a
-            is value, type Integer, local scope,
-        b
-            is value, type Integer, local scope,
-    )
-    return if {
-        a > b -> a
-        else -> b
+let function main {
+    labels[return(Integer), generics[], mutable(false), visibility(public),
+        scope(project), implementation(full), ]
+    parameters {
+        let value a {
+            labels[return(Integer), mutable(false), scope(local), implementation(full), ]
+        }
+        let value b {
+            labels[return(Integer), mutable(false), scope(local), implementation(full), ]
+        }
+    }
+    body { 
+        return if {
+            a > b then a;
+            else then b;
+        };
     }
 }
-    is function, returns Integer, project scope,
 ```
 
-### Values (immutable)
+### Values
 
+Grammar:
 ```
-greeting -> "Hello world!"
-    is value, type String, local scope,
-```
-
-### Variables (mutable)
-
-```
-counter -> 0
-    is variable, type Integer, local scope,
-
-counter ~~> counter + 1
+"let value " , identifier , "{" ,
+  labels ,
+  ("initially(" , statement , ")"
+"}"
 ```
 
-Variables are declared with `is variable` and mutated with the `~~>` operator ("now refers to").
+Example:
+```
+let value greeting {
+    labels[return(String), mutable(false), scope(local), implementation(full), ]
+    initially("Hello world!")
+}
+let value counter {
+    labels[return(Integer), mutable(true), scope(local), implementation(full), ]
+    initially(0)
+}
 
-### Scope labels
-
-Every declaration carries a scope label:
-
-| Scope | Meaning |
-|-------|---------|
-| `project scope` | Top-level, visible across the project |
-| `local scope` | Inside a function body |
-| `instance scope` | Inside a blueprint |
+counter becomes counter + 1;
+```
 
 ### If expressions (multi-branch)
 
-Used to produce a value. Must include an `else` branch:
+Used to produce a value. If used to return or initiate a value, they must include an `else` branch:
 
 ```
+if {
+    someValue = "foo" then printLine("Foo!");
+};
 return if {
-    a > b -> a
-    else -> b
-}
+    a > b then a;
+    else then b;
+};
 ```
 
 Branches can be nested:
 
 ```
 return if {
-    a < b -> if {
-        b < c -> b
-        else -> a
+    a < b then if {
+        b < c then b;
+        else then a;
     }
-    else -> b
-}
+    else then b;
+};
 ```
 
 ### If statements (single-branch)
@@ -128,15 +300,15 @@ return if {
 Used for conditional side effects. No `else` needed:
 
 ```
-if x > 5 -> printLine(x)
+if x > 5 then printLine(x);
 ```
 
 ### While loops
 
 ```
 while counter < 10 {
-    printLine(counter)
-    counter ~~> counter + 1
+    printLine(counter);
+    counter becomes counter + 1;
 }
 ```
 
@@ -150,85 +322,120 @@ while counter < 10 {
 
 ### Boolean operators
 
-`and`, `or`, `not` — with short-circuit evaluation.
+`and`, `or`, `not` — with short-circuit evaluation. 
+`not` precedes `and` and `or`.
+`and` and `or` have the same precedence.
 
 ```
-if x > 5 and x < 10 -> printLine(x)
+if x > 5 and x < 10 then printLine(x)
 ```
 
-### Blueprints (classes)
-
+### Type
+#### Full implementation
 ```
-Cat -> {
-    parameters(
-        name,
-            is value, type String, instance scope,
-    )
-    speak -> {
-        parameters()
-        printLine("Meow")
+let type Cat {
+    labels[return(), generics[], mutable(false), visibility(public),
+      scope(project), implementation(full), ]
+    parameters {
+        let value name {
+            labels[return(String), mutable(false), scope(instance), implementation(full), ]
+        }
     }
-        is function, returns nothing, instance scope,
+    instance {
+        let function speak {
+            labels[return(), generics[], mutable(false), visibility(public),
+                scope(instance), implementation(full), contract()]
+            parameters {}
+            body { printLine("Meow"); }
+        }
+    }
 }
-    is blueprint,
 ```
 
 Instantiation and usage:
 
 ```
-cat -> Cat("Whiskers")
-    is value, type Cat, local scope,
+let value cat {
+    labels[return(Cat), generics[], mutable(false), visibility(public),
+        scope(local), implementation(full),]
+    initially(Cat("Krokmou"))
+}
 cat.speak()
 printLine(cat.name)
 ```
 
-### Interfaces (declared implementations)
+#### No implementations
 
 ```
-Animal -> {
-    name
-        is value, type String, instance scope
-    speak -> {
-        parameters()
+let type Animal {
+    labels[return(), generics[], mutable(true), visibility(public),
+        scope(project), implementation(none),]
+    instance {
+        let value name {
+            labels[return(String), mutable(false), scope(instance), implementation(none), ]
+        }
+        let function speak {
+            labels[return(), generics[], mutable(false), visibility(public),
+                scope(instance), implementation(full)]
+            parameters {}
+        }
     }
-        is function, returns nothing, instance scope
 }
-    is blueprint, declared implementation,
 
-Cat -> {
-    parameters(
-        name,
-            is value, type String, instance scope, full implementation,
-            contracted,
-    )
-    speak -> {
-        parameters()
-        printLine("Meow")
+let type Cat {
+    labels[return(Animal), generics[], mutable(false), visibility(public),
+      scope(project), implementation(full), ]
+    parameters {
+        let value name {
+            labels[return(String), mutable(false), scope(instance), implementation(full), contract(Animal)]
+        }
     }
-        is function, returns nothing, instance scope, full implementation,
-        contracted,
+    instance {
+        let function speak {
+            labels[return(), generics[], mutable(false), visibility(public),
+                scope(instance), implementation(full), contract(Animal)]
+            parameters {}
+            body { printLine("Meow"); }
+        }
+    }
 }
-    is blueprint, full implementation, type Animal,
+```
+
+Instantiation and usage:
+
+```
+let value cat {
+    labels[return(Animal), generics[], mutable(false), visibility(public),
+        scope(local), implementation(full),]
+    initially(Cat("Krokmou"))
+}
+cat.speak()
+printLine(cat.name)
 ```
 
 ### Singletons
 
 ```
-Red
-    is singleton
-Green
-    is singleton
-Blue
-    is singleton
+let singleton Red {
+    labels[return(), visibility(public), scope(project)]
+}
+let singleton Red {
+    labels[return(), visibility(public), scope(project)]
+}
+let singleton Red {
+    labels[return(), visibility(public), scope(project)]
+}
 ```
 
 Singletons are unique identity values with no fields or methods. Compare with `=`.
 
+
 ### Built-in functions
 
-| Function | Description |
-|----------|-------------|
+| Function           | Description                                                                 |
+|--------------------|-----------------------------------------------------------------------------|
 | `printLine(value)` | Prints a value followed by a newline. Accepts String, Integer, and Boolean. |
+| `readInput()`      | Wait for user input from the console                                        |
 
 ## Examples
 
@@ -242,14 +449,4 @@ solingua examples/hello.sol
 Available examples:
 
 - `hello.sol` — Hello world
-- `variables.sol` — Values, variables, and mutation
-- `arithmetic.sol` — Arithmetic operators and precedence
-- `booleans.sol` — Boolean type and logical operators
-- `max.sol` — Function parameters, if expressions
-- `comparisons.sol` — Nested if expressions, multiple comparison operators
 - `factorial.sol` — Recursion
-- `if_statement.sol` — Single-branch if statements
-- `loops.sol` — While loops with mutation
-- `blueprint.sol` — Blueprints (classes) with methods and fields
-- `interfaces.sol` — Declared and full implementation blueprints
-- `singletons.sol` — Singleton values

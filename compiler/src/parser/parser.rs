@@ -1,93 +1,156 @@
 use crate::ast::{
     ArithmeticOperator, ComparisonOperator, ConditionBranch,
     Expression, LogicalOperator, Program, Statement, StringTemplatePart,
+    Declaration, FunctionDeclaration, ValueDeclaration, Parameter,
 };
 use crate::lexer::{Span, SpannedToken, Token};
 use crate::lexer::keyword::Keyword;
 use crate::lexer::symbol::{Symbol, Bound, Arithmetic};
 use crate::lexer::comparison::{ComparisonOperator as LexerComparison, ComparisonOrientation};
 use crate::lexer::literal::{Literal, StringLiteral, StringPart};
+use crate::util::Trivalent;
 
 pub struct Parser {
     tokens: Vec<SpannedToken>,
     position: usize,
+    verbose: bool,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<SpannedToken>) -> Self {
-        Parser { tokens, position: 0 }
+    pub fn new(tokens: Vec<SpannedToken>, verbose: bool) -> Self {
+        Parser { tokens, position: 0, verbose }
     }
 
-    pub fn parse_program(&mut self, verbose: bool) -> Program {
+    pub fn parse_program(&mut self) -> Program {
         let mut declarations = Vec::new();
 
         while !self.is_at_end() {
-            let span_start = self.current_span();
-            let name = self.expect_identifier();
-            let is_label = self.parse_label_is();
-            let decl = self.parse_declaration(name, is_label, span_start, verbose);
-            declarations.push(decl);
+            declarations.push(self.parse_declaration());
         }
 
-        match super::validation::validate_and_build_ast(declarations) {
-            Ok(program) => program,
-            Err(errors) => {
-                for error in &errors {
-                    eprintln!("  {}", error);
-                }
-                panic!("Validation failed with {} error(s)", errors.len());
+        Program { declarations }
+    }
+
+    // === Declarations ===
+
+    fn parse_declaration(&mut self) -> Declaration {
+        self.expect_token(&Token::Keyword(Keyword::Let));
+        let construct = self.advance().clone();
+
+        match construct {
+            Token::Keyword(Keyword::Function) => {
+                let decl = self.parse_function_declaration();
+                Declaration::Function(decl)
+            }
+            other => {
+                let span = self.current_span();
+                panic!("{}:{}: Expected construct type (function, value, ...), got {:?}",
+                    span.line, span.column, other);
             }
         }
     }
 
-    fn current_is_name(&self) -> bool {
-        matches!(
-            self.current(),
-            Token::Identifier(_)
-                | Token::Keyword(Keyword::Value)
-                | Token::Keyword(Keyword::Type)
-                | Token::Keyword(Keyword::None)
-        )
+    fn parse_function_declaration(&mut self) -> FunctionDeclaration {
+        let name = self.expect_identifier();
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+
+        let labels = self.parse_label_declaration();
+
+        let mut return_type = "nothing".to_string();
+        for ld in &labels {
+            if let super::label::Label::Return(Trivalent::Some(rt)) = &ld.label {
+                return_type = rt.clone();
+            }
+        }
+
+        let mut parameters = Vec::new();
+        if self.check(&Token::Keyword(Keyword::Parameters)) {
+            self.advance();
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+            parameters = self.parse_parameter_list();
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+        }
+
+        let mut body = Vec::new();
+        if self.check(&Token::Keyword(Keyword::Body)) {
+            self.advance();
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+            body = self.parse_statement_list();
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+        }
+
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+
+        FunctionDeclaration { name, parameters, return_type, body }
     }
 
-    /// Parse a statement
-    pub(crate) fn parse_statement(&mut self) -> Statement {
-        println!("Parsing statement");
+    fn parse_parameter_list(&mut self) -> Vec<Parameter> {
+        let mut parameters = Vec::new();
 
-        // Return statement
+        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+            self.expect_token(&Token::Keyword(Keyword::Let));
+            let name = self.expect_identifier();
+            self.expect_token(&Token::Keyword(Keyword::Value));
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+
+            let labels = self.parse_label_declaration();
+
+            let mut type_name = "Unknown".to_string();
+            for ld in &labels {
+                if let super::label::Label::Return(Trivalent::Some(t)) = &ld.label {
+                    type_name = t.clone();
+                }
+            }
+
+            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+
+            parameters.push(Parameter { name, type_name });
+        }
+
+        parameters
+    }
+
+    fn parse_statement_list(&mut self) -> Vec<Statement> {
+        let mut statements = Vec::new();
+        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+            statements.push(self.parse_statement());
+            // Optional semicolons between statements
+            if self.check(&Token::Symbol(Symbol::Semicolon)) {
+                self.advance();
+            }
+        }
+        statements
+    }
+
+    // === Statements ===
+
+    pub(crate) fn parse_statement(&mut self) -> Statement {
         if self.check(&Token::Keyword(Keyword::Return)) {
             return self.parse_return_statement();
         }
 
-        // While loop: `while condition { body }`
         if self.check(&Token::Keyword(Keyword::While)) {
             return self.parse_while_loop();
         }
 
-        // Single-branch if statement: `if condition then body`
         if self.check(&Token::Keyword(Keyword::If))
             && !self.is_next(&Token::Symbol(Symbol::Brace(Bound::Opening)))
         {
             return self.parse_if_statement();
         }
 
-        // Mutation: `name becomes expression`
         if self.is_mutation_statement() {
             return self.parse_mutation_statement();
         }
 
-        // Local value declaration: `name is value, type T, local scope, means expr`
         if self.is_local_declaration() {
             return self.parse_local_declaration();
         }
 
-        // Expression statement
-        println!("Parsing expression statement");
         let expression = self.parse_expression();
         Statement::ExpressionStatement(expression)
     }
 
-    /// Parse: `if condition then body`
     fn parse_if_statement(&mut self) -> Statement {
         self.expect_token(&Token::Keyword(Keyword::If));
         let condition = self.parse_expression();
@@ -99,90 +162,27 @@ impl Parser {
         }
     }
 
-    /// Parse: `while condition { body }`
     fn parse_while_loop(&mut self) -> Statement {
         self.expect_token(&Token::Keyword(Keyword::While));
         let condition = self.parse_expression();
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
-
         let mut body = Vec::new();
         while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
             body.push(self.parse_statement());
+            if self.check(&Token::Symbol(Symbol::Semicolon)) {
+                self.advance();
+            }
         }
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
-
         Statement::WhileLoop { condition, body }
     }
 
-    /// Parse: `return expression`
     fn parse_return_statement(&mut self) -> Statement {
         self.expect_token(&Token::Keyword(Keyword::Return));
         let expression = self.parse_expression();
         Statement::ReturnStatement(expression)
     }
 
-    /// Look ahead: `name is ...` (local declaration)
-    fn is_local_declaration(&self) -> bool {
-        if self.current_is_name() {
-            if self.position + 1 < self.tokens.len() {
-                return self.tokens[self.position + 1].token == Token::Keyword(Keyword::Is);
-            }
-        }
-        false
-    }
-
-    /// Parse a local declaration as a statement
-    fn parse_local_declaration(&mut self) -> Statement {
-        let name = self.expect_identifier();
-        let is_label = self.parse_label_is();
-
-        // Parse the remaining labels to get type and means
-        let type_desc = self.parse_type_label(Keyword::Type);
-        let mutability = self.parse_label_mutable();
-        if mutability.is_none() {
-            let span = self.current_span();
-            panic!(
-                "{}:{}: Local declaration '{}' is missing mutability label (mutable/immutable)",
-                span.line, span.column, name
-            );
-        }
-        let _scope = self.parse_label_scope();
-        let _implementation = self.parse_label_implementation();
-        let _contract = self.parse_label_contract();
-        let means = self.parse_label_means();
-
-        let type_name = match &type_desc {
-            Some(super::label::r#type::TypeDescription::Some { identifier, .. }) => identifier.clone(),
-            _ => "Unknown".to_string(),
-        };
-        let type_argument = match &type_desc {
-            Some(super::label::r#type::TypeDescription::Some { generics, .. }) if !generics.is_empty() => {
-                Some(generics[0].clone())
-            }
-            _ => None,
-        };
-
-        let assigned_value = match means {
-            Some(super::label::means::Means::Expression(expr)) => expr,
-            Some(super::label::means::Means::Block(_)) => {
-                let span = self.current_span();
-                panic!("{}:{}: Local value cannot have a block body", span.line, span.column);
-            }
-            None => {
-                let span = self.current_span();
-                panic!("{}:{}: Local value '{}' is missing `means` label", span.line, span.column, name);
-            }
-        };
-
-        Statement::ValueDeclaration {
-            name,
-            type_name,
-            type_argument,
-            assigned_value,
-        }
-    }
-
-    /// Look ahead: `name becomes expr`
     fn is_mutation_statement(&self) -> bool {
         if self.current_is_name() {
             if self.position + 1 < self.tokens.len() {
@@ -192,7 +192,6 @@ impl Parser {
         false
     }
 
-    /// Parse: `name becomes expression`
     fn parse_mutation_statement(&mut self) -> Statement {
         let name = self.expect_identifier();
         self.expect_token(&Token::Keyword(Keyword::Becomes));
@@ -200,10 +199,67 @@ impl Parser {
         Statement::MutationStatement { name, new_value }
     }
 
-    /// Parse an expression — lowest precedence: `and`/`or` (same level, left-associative)
-    pub(crate) fn parse_expression(&mut self) -> Expression {
-        println!("Parsing expression");
+    fn is_local_declaration(&self) -> bool {
+        self.check(&Token::Keyword(Keyword::Let))
+    }
 
+    fn parse_local_declaration(&mut self) -> Statement {
+        self.expect_token(&Token::Keyword(Keyword::Let));
+        self.expect_token(&Token::Keyword(Keyword::Value));
+        let name = self.expect_identifier();
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+
+        let mut type_name = "Unknown".to_string();
+        let mut type_argument: Option<String> = None;
+        let mut assigned_value: Option<Expression> = None;
+
+        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+            match self.current().clone() {
+                Token::Keyword(Keyword::Labels) => {
+                    self.advance();
+                    self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Opening)));
+                    while !self.check(&Token::Symbol(Symbol::Bracket(Bound::Closing))) {
+                        match self.current().clone() {
+                            Token::Keyword(Keyword::Type) => {
+                                self.advance();
+                                self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Opening)));
+                                type_name = self.expect_identifier();
+                                if self.check(&Token::Keyword(Keyword::Of)) {
+                                    self.advance();
+                                    type_argument = Some(self.expect_identifier());
+                                }
+                                self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
+                            }
+                            Token::Symbol(Symbol::Comma) => { self.advance(); }
+                            _ => { self.advance(); } // skip other labels for now
+                        }
+                    }
+                    self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Closing)));
+                }
+                Token::Identifier(ref s) if s == "means" => {
+                    self.advance();
+                    assigned_value = Some(self.parse_expression());
+                }
+                other => {
+                    let span = self.current_span();
+                    panic!("{}:{}: Unexpected in value declaration: {:?}", span.line, span.column, other);
+                }
+            }
+        }
+
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+
+        Statement::ValueDeclaration {
+            name,
+            type_name,
+            type_argument,
+            assigned_value: assigned_value.unwrap_or(Expression::IntegerLiteral(0)),
+        }
+    }
+
+    // === Expressions ===
+
+    pub(crate) fn parse_expression(&mut self) -> Expression {
         let mut left = self.parse_not_expression();
 
         loop {
@@ -223,21 +279,15 @@ impl Parser {
                     operator,
                     right: Box::new(right),
                 };
-
             } else {
                 break;
             }
         }
 
-        println!("Expression: {:?}", left);
-
         left
     }
 
-    /// Parse `not` (unary prefix, binds tighter than and/or but looser than comparison)
     fn parse_not_expression(&mut self) -> Expression {
-        println!("Parsing `not` expression");
-
         if self.check(&Token::Keyword(Keyword::Not)) {
             self.advance();
             let operand = self.parse_not_expression();
@@ -246,27 +296,15 @@ impl Parser {
         self.parse_comparison_expression()
     }
 
-    /// Parse comparison expressions
     fn parse_comparison_expression(&mut self) -> Expression {
         let left = self.parse_additive_expression();
-        println!("Parsed additive expression: {:?}", left.clone());
 
         let operator = match self.current() {
-            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::GreaterThan) }) => {
-                Some(ComparisonOperator::GreaterThan)
-            }
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::GreaterThan) }) => {
-                Some(ComparisonOperator::GreaterThanOrEqual)
-            }
-            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::LessThan) }) => {
-                Some(ComparisonOperator::LessThan)
-            }
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::LessThan) }) => {
-                Some(ComparisonOperator::LessThanOrEqual)
-            }
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: None }) => {
-                Some(ComparisonOperator::Equal)
-            }
+            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::GreaterThan) }) => Some(ComparisonOperator::GreaterThan),
+            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::GreaterThan) }) => Some(ComparisonOperator::GreaterThanOrEqual),
+            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::LessThan) }) => Some(ComparisonOperator::LessThan),
+            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::LessThan) }) => Some(ComparisonOperator::LessThanOrEqual),
+            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: None }) => Some(ComparisonOperator::Equal),
             _ => None,
         };
 
@@ -283,10 +321,8 @@ impl Parser {
         left
     }
 
-    /// Parse addition and subtraction (left-associative)
     fn parse_additive_expression(&mut self) -> Expression {
         let mut left = self.parse_multiplicative_expression();
-        println!("Parsed multiplicative expression: {:?}", left.clone());
 
         loop {
             let operator = if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus))) {
@@ -313,10 +349,8 @@ impl Parser {
         left
     }
 
-    /// Parse multiplication and division (left-associative)
     fn parse_multiplicative_expression(&mut self) -> Expression {
         let mut left = self.parse_postfix_expression();
-        println!("Parsed postfix expression: {:?}", left.clone());
 
         loop {
             let operator = if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Times))) {
@@ -343,21 +377,15 @@ impl Parser {
         left
     }
 
-    /// Parse postfix expressions: member access (.) and method calls (.method())
     fn parse_postfix_expression(&mut self) -> Expression {
         let mut expression = self.parse_primary_expression();
-        println!("Parsed primary expression: {:?}", expression.clone());
-        println!("Current token: {:?}", self.current());
 
         while self.check(&Token::Symbol(Symbol::Dot)) {
-            self.advance(); // consume '.'
-            println!("Found dot");
-
+            self.advance();
             let member = self.expect_identifier();
-            println!("Member: {:?}", member.clone());
 
             if self.check(&Token::Symbol(Symbol::Parentheses(Bound::Opening))) {
-                self.advance(); // consume '('
+                self.advance();
                 let arguments = self.parse_arguments();
                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                 expression = Expression::MethodCall {
@@ -376,14 +404,12 @@ impl Parser {
         expression
     }
 
-    /// Parse a primary expression (literals, identifiers, function calls, if)
     fn parse_primary_expression(&mut self) -> Expression {
         match self.current().clone() {
             Token::Identifier(name) => {
                 self.advance();
-                // Check if it's a function call
                 if self.check(&Token::Symbol(Symbol::Parentheses(Bound::Opening))) {
-                    self.advance(); // consume '('
+                    self.advance();
                     let arguments = self.parse_arguments();
                     self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                     Expression::FunctionCall { name, arguments }
@@ -397,7 +423,19 @@ impl Parser {
             }
             Token::Literal(Literal::String(StringLiteral::Template(parts))) => {
                 self.advance();
-                self.build_string_template(parts)
+                Expression::StringTemplate {
+                    parts: parts.into_iter().map(|p| match p {
+                        StringPart::Text(s) => StringTemplatePart::Literal(s),
+                        StringPart::Interpolation(s) => {
+                            let mut sub_parser = Parser::new(
+                                crate::lexer::Lexer::new(&s).tokenize(),
+                                false,
+                            );
+                            let expr = sub_parser.parse_expression();
+                            StringTemplatePart::Expression(expr)
+                        }
+                    }).collect(),
+                }
             }
             Token::Literal(Literal::Integer(value)) => {
                 self.advance();
@@ -411,7 +449,7 @@ impl Parser {
                 self.parse_if_expression()
             }
             Token::Symbol(Symbol::Parentheses(Bound::Opening)) => {
-                self.advance(); // consume '('
+                self.advance();
                 let expression = self.parse_expression();
                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                 expression
@@ -423,31 +461,25 @@ impl Parser {
         }
     }
 
-    /// Build a StringTemplate expression from pre-parsed template parts.
-    /// Interpolation expressions are stored as raw strings and need sub-parsing.
-    fn build_string_template(&mut self, parts: Vec<StringPart>) -> Expression {
-        let mut template_parts = Vec::new();
-        for part in parts {
-            match part {
-                StringPart::Text(text) => {
-                    template_parts.push(StringTemplatePart::Literal(text));
-                }
-                StringPart::Interpolation(expr_text) => {
-                    // Sub-lex and parse the interpolation expression
-                    let mut sub_lexer = crate::lexer::Lexer::new(&expr_text);
-                    let sub_tokens = sub_lexer.tokenize();
-                    let mut sub_parser = Parser::new(sub_tokens);
-                    let expr = sub_parser.parse_expression();
-                    template_parts.push(StringTemplatePart::Expression(expr));
-                }
-            }
-        }
-        Expression::StringTemplate { parts: template_parts }
-    }
-
-    /// Parse: `if { condition then result ... else then result }`
     fn parse_if_expression(&mut self) -> Expression {
         self.expect_token(&Token::Keyword(Keyword::If));
+
+        // Inline form: `if condition then result else result`
+        if !self.check(&Token::Symbol(Symbol::Brace(Bound::Opening))) {
+            let condition = self.parse_expression();
+            self.expect_token(&Token::Keyword(Keyword::Then));
+            let then_value = self.parse_primary_expression();
+
+            self.expect_token(&Token::Keyword(Keyword::Else));
+            let else_value = self.parse_primary_expression();
+
+            return Expression::IfExpression {
+                branches: vec![ConditionBranch { condition, result: then_value }],
+                else_branch: Box::new(else_value),
+            };
+        }
+
+        // Braced form: `if { condition then result ... else then result }`
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
 
         let mut branches = Vec::new();
@@ -468,7 +500,6 @@ impl Parser {
         }
 
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
-
         let else_branch = else_branch.expect("If expression must have an else branch");
 
         Expression::IfExpression {
@@ -477,7 +508,6 @@ impl Parser {
         }
     }
 
-    /// Parse comma-separated arguments
     fn parse_arguments(&mut self) -> Vec<Expression> {
         let mut arguments = Vec::new();
         if !self.check(&Token::Symbol(Symbol::Parentheses(Bound::Closing))) {
@@ -492,7 +522,11 @@ impl Parser {
         arguments
     }
 
-    // --- Helper methods ---
+    // === Helpers ===
+
+    fn current_is_name(&self) -> bool {
+        matches!(self.current(), Token::Identifier(_) | Token::Keyword(Keyword::Value) | Token::Keyword(Keyword::Type) | Token::Keyword(Keyword::None))
+    }
 
     pub(crate) fn current(&self) -> &Token {
         &self.tokens[self.position].token
@@ -537,6 +571,10 @@ impl Parser {
                 self.advance();
                 name
             }
+            // Allow keywords used as identifiers in name positions
+            Token::Keyword(Keyword::Value) => { self.advance(); "value".to_string() }
+            Token::Keyword(Keyword::Type) => { self.advance(); "type".to_string() }
+            Token::Keyword(Keyword::None) => { self.advance(); "nothing".to_string() }
             other => {
                 let span = self.current_span();
                 panic!("{}:{}: Expected identifier, got {:?}", span.line, span.column, other);

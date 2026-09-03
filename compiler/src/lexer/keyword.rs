@@ -1,9 +1,15 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
-    Means,
+    Let,
     Becomes,
-    // is label
-    Is,
+    // declaration blocks
+    Labels,
+    Body,
+    // Visibility label
+    Visibility,
+    Public,
+    Private,
+    // What construct
     Value,
     Function,
     Blueprint,
@@ -51,9 +57,13 @@ impl Keyword {
         let word = read_word(&get_char)?;
 
         match word.as_str() {
-            "means" => Some(Keyword::Means),
+            "let" => Some(Keyword::Let),
             "becomes" => Some(Keyword::Becomes),
-            "is" => Some(Keyword::Is),
+            "labels" => Some(Keyword::Labels),
+            "body" => Some(Keyword::Body),
+            "visibility" => Some(Keyword::Visibility),
+            "public" => Some(Keyword::Public),
+            "private" => Some(Keyword::Private),
             "value" => Some(Keyword::Value),
             "function" => Some(Keyword::Function),
             "blueprint" => Some(Keyword::Blueprint),
@@ -91,9 +101,13 @@ impl Keyword {
 
     pub fn declaration_size(&self) -> usize {
         match self {
-            Keyword::Means => 5,
+            Keyword::Let => 3,
             Keyword::Becomes => 7,
-            Keyword::Is => 2,
+            Keyword::Labels => 6,
+            Keyword::Body => 4,
+            Keyword::Visibility => 10,
+            Keyword::Public => 6,
+            Keyword::Private => 7,
             Keyword::Value => 5,
             Keyword::Function => 8,
             Keyword::Blueprint => 9,

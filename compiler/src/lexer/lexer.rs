@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use super::comparison::ComparisonOperator;
 use super::keyword::Keyword;
 use super::literal::Literal;
@@ -13,7 +15,7 @@ pub enum Token {
     EndOfFile,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
     pub line: usize,
     pub column: usize,
@@ -26,102 +28,84 @@ pub struct SpannedToken {
 }
 
 pub struct Lexer {
-    input: Vec<char>,
-    position: usize,
-    line: usize,
-    column: usize,
+    input: String,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
-        Lexer {
-            input: input.chars().collect(),
-            position: 0,
-            line: 1,
-            column: 1,
-        }
+        Lexer { input: input.to_string() }
     }
 
-    pub fn tokenize(&mut self) -> Vec<SpannedToken> {
+    pub fn tokenize(&self) -> Vec<SpannedToken> {
+        let pattern = Regex::new(concat!(
+            r#""(?:[^"\\]|\\.)*""#,   // strings (with escaped chars)
+            r"|[a-zA-Z_][a-zA-Z0-9_]*", // words (identifiers/keywords)
+            r"|\d+",                     // integers
+            r"|>=|<=",                   // two-char comparison operators
+            r"|[><=(){}\[\],+\-*/;.]",    // single-char symbols and operators
+        )).unwrap();
+
         let mut tokens = Vec::new();
+        let mut line = 1usize;
+        let mut last_end = 0usize;
 
-        loop {
-            self.skip_whitespace();
-
-            if self.position >= self.input.len() {
-                tokens.push(SpannedToken { token: Token::EndOfFile, span: self.current_span() });
-                break;
+        for mat in pattern.find_iter(&self.input) {
+            // Track line/column from whitespace between matches
+            for ch in self.input[last_end..mat.start()].chars() {
+                if ch == '\n' {
+                    line += 1;
+                }
             }
 
-            let span = self.current_span();
-            let token = self.next_token();
+            let column = self.column_at(mat.start());
+            let span = Span { line, column };
+            let chunk = mat.as_str();
+            last_end = mat.end();
+
+            let token = Self::classify(chunk);
             tokens.push(SpannedToken { token, span });
         }
+
+        tokens.push(SpannedToken {
+            token: Token::EndOfFile,
+            span: Span { line, column: self.column_at(self.input.len()) },
+        });
 
         tokens
     }
 
-    fn next_token(&mut self) -> Token {
-        let character = self.input[self.position];
+    fn classify(chunk: &str) -> Token {
+        let chars: Vec<char> = chunk.chars().collect();
 
-        if let Some(symbol) = Symbol::from(character) {
-            self.advance_by(1);
-            return Token::Symbol(symbol);
+        if let Some(symbol) = Symbol::from(chars[0]) {
+            if chars.len() == 1 {
+                return Token::Symbol(symbol);
+            }
         }
 
-        if let Some(operator) = ComparisonOperator::from(character, self.peek(1)) {
-            self.advance_by(operator.declaration_size());
-            return Token::ComparisonOperator(operator);
+        if let Some(operator) = ComparisonOperator::from(chars[0], chars.get(1).copied()) {
+            if chars[0] == '>' || chars[0] == '<' || chars[0] == '=' {
+                return Token::ComparisonOperator(operator);
+            }
         }
 
-        if let Some(literal) = Literal::from(|index| self.peek(index)) {
-            self.advance_by(literal.declaration_size());
+        if let Some(literal) = Literal::from(|index| chars.get(index).copied()) {
             return Token::Literal(literal);
         }
 
-        if let Some(keyword) = Keyword::from(|index| self.peek(index)) {
-            self.advance_by(keyword.declaration_size());
+        if let Some(keyword) = Keyword::from(|index| chars.get(index).copied()) {
             return Token::Keyword(keyword);
         }
 
-        self.read_identifier()
+        Token::Identifier(chunk.to_string())
     }
 
-    fn skip_whitespace(&mut self) {
-        while self.position < self.input.len() && self.input[self.position].is_whitespace() {
-            if self.input[self.position] == '\n' {
-                self.line += 1;
-                self.column = 1;
-            } else {
-                self.column += 1;
-            }
-            self.position += 1;
+    fn column_at(&self, byte_pos: usize) -> usize {
+        let before = &self.input[..byte_pos];
+        match before.rfind('\n') {
+            Some(nl) => byte_pos - nl,
+            None => byte_pos + 1,
         }
-    }
-
-    fn advance_by(&mut self, count: usize) {
-        self.column += count;
-        self.position += count;
-    }
-
-    fn current_span(&self) -> Span {
-        Span { line: self.line, column: self.column }
-    }
-
-    fn peek(&self, offset: usize) -> Option<char> {
-        self.input.get(self.position + offset).copied()
-    }
-
-    fn read_identifier(&mut self) -> Token {
-        let start = self.position;
-        while self.position < self.input.len()
-            && (self.input[self.position].is_alphanumeric() || self.input[self.position] == '_')
-        {
-            self.position += 1;
-            self.column += 1;
-        }
-        let name: String = self.input[start..self.position].iter().collect();
-        Token::Identifier(name)
     }
 }
 
@@ -253,11 +237,24 @@ mod tests {
     }
 
     #[test]
-    fn test_mixed_expression() {
-        assert_eq!(tokenize("x + 1"), vec![
+    fn test_no_spaces_between_symbols_and_identifiers() {
+        assert_eq!(tokenize("x+1"), vec![
             Token::Identifier("x".to_string()),
             Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus)),
             Token::Literal(Literal::Integer(1)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_function_call_no_spaces() {
+        assert_eq!(tokenize("foo(bar,baz)"), vec![
+            Token::Identifier("foo".to_string()),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Identifier("bar".to_string()),
+            Token::Symbol(Symbol::Comma),
+            Token::Identifier("baz".to_string()),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
             Token::EndOfFile,
         ]);
     }
@@ -302,5 +299,25 @@ mod tests {
         assert_eq!(tokens[9], Token::Keyword(Keyword::Local));
         assert_eq!(tokens[10], Token::Keyword(Keyword::Scope));
         assert_eq!(tokens[11], Token::Symbol(Symbol::Comma));
+    }
+
+    #[test]
+    fn test_string_template() {
+        let tokens = tokenize(r#""Hello \(name)!""#);
+        assert_eq!(tokens.len(), 2); // template literal + EOF
+        assert!(matches!(&tokens[0], Token::Literal(Literal::String(StringLiteral::Template(_)))));
+    }
+
+    #[test]
+    fn test_comparison_no_spaces() {
+        assert_eq!(tokenize("a>=b"), vec![
+            Token::Identifier("a".to_string()),
+            Token::ComparisonOperator(ComparisonOperator {
+                checks_equality: true,
+                orientation: Some(ComparisonOrientation::GreaterThan),
+            }),
+            Token::Identifier("b".to_string()),
+            Token::EndOfFile,
+        ]);
     }
 }

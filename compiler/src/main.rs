@@ -3,6 +3,7 @@ mod codegen;
 mod lexer;
 mod parser;
 mod typechecker;
+mod util;
 
 use codegen::CodeGenerator;
 use lexer::Lexer;
@@ -44,8 +45,8 @@ fn main() {
     }
 
     // Parse
-    let mut parser = Parser::new(tokens);
-    let program = parser.parse_program(verbose);
+    let mut parser = Parser::new(tokens, verbose);
+    let program = parser.parse_program();
 
     if verbose {
         println!("═══ Abstract Syntax Tree ═══");
