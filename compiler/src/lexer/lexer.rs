@@ -261,10 +261,10 @@ mod tests {
 
     #[test]
     fn test_declaration() {
-        let tokens = tokenize("greeting means \"Hello\"");
-        assert_eq!(tokens[0], Token::Identifier("greeting".to_string()));
-        assert_eq!(tokens[1], Token::Keyword(Keyword::Means));
-        assert_eq!(tokens[2], Token::Literal(Literal::String(StringLiteral::Plain("Hello".to_string()))));
+        let tokens = tokenize("let value greeting");
+        assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Value));
+        assert_eq!(tokens[2], Token::Identifier("greeting".to_string()));
     }
 
     #[test]
@@ -287,18 +287,17 @@ mod tests {
 
     #[test]
     fn test_full_statement() {
-        let tokens = tokenize("counter means 0 is value, type Integer, local scope,");
-        assert_eq!(tokens[0], Token::Identifier("counter".to_string()));
-        assert_eq!(tokens[1], Token::Keyword(Keyword::Means));
-        assert_eq!(tokens[2], Token::Literal(Literal::Integer(0)));
-        assert_eq!(tokens[3], Token::Keyword(Keyword::Is));
-        assert_eq!(tokens[5], Token::Symbol(Symbol::Comma));
-        assert_eq!(tokens[6], Token::Keyword(Keyword::Type));
-        assert_eq!(tokens[7], Token::Identifier("Integer".to_string()));
-        assert_eq!(tokens[8], Token::Symbol(Symbol::Comma));
-        assert_eq!(tokens[9], Token::Keyword(Keyword::Local));
-        assert_eq!(tokens[10], Token::Keyword(Keyword::Scope));
-        assert_eq!(tokens[11], Token::Symbol(Symbol::Comma));
+        let tokens = tokenize("let value counter { labels[return(Integer), scope(local), ] initially(0) }");
+        assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Value));
+        assert_eq!(tokens[2], Token::Identifier("counter".to_string()));
+        assert_eq!(tokens[3], Token::Symbol(Symbol::Brace(Bound::Opening)));
+        assert_eq!(tokens[4], Token::Keyword(Keyword::Labels));
+        assert_eq!(tokens[5], Token::Symbol(Symbol::Bracket(Bound::Opening)));
+        assert_eq!(tokens[6], Token::Keyword(Keyword::Return));
+        assert_eq!(tokens[11], Token::Keyword(Keyword::Scope));
+        assert_eq!(tokens[16], Token::Symbol(Symbol::Bracket(Bound::Closing)));
+        assert_eq!(tokens[17], Token::Keyword(Keyword::Initially));
     }
 
     #[test]

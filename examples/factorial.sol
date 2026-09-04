@@ -1,5 +1,5 @@
 let function factorial {
-    labels[return(Integer), generics[], mutable(false), visibility(public),
+    labels[return(Integer), generic<>, mutable(false), visibility(public),
         scope(project), implementation(full), ]
 
     parameters {
@@ -8,12 +8,12 @@ let function factorial {
         }
     }
     body {
-        return if n = 0 then 0 else factorial(n - 1);
+        return if n = 0 then 1 else n * factorial(n - 1);
     }
 }
 
 let function main {
-    labels[return(), generics[], mutable(false), visibility(public),
+    labels[return(), generic<>, mutable(false), visibility(public),
         scope(project), implementation(full), ]
     parameters{}
     body { printLine(factorial(15)); }

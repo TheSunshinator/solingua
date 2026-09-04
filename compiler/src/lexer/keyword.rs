@@ -5,19 +5,19 @@ pub enum Keyword {
     // declaration blocks
     Labels,
     Body,
+    Initially,
     // Visibility label
     Visibility,
     Public,
     Private,
+    Folder,
+    Subfolders,
+    Package,
     // What construct
     Value,
     Function,
-    Blueprint,
-    Singleton,
-    Container,
-    // type label
     Type,
-    None,
+    Singleton,
     // parameters label
     Parameters,
     // Control flow
@@ -34,22 +34,19 @@ pub enum Keyword {
     Implementation,
     Full,
     Partial,
+    None,
+    Inherited,
     // contract label
     Contract,
-    Filled,
     // scope label
     Scope,
     Instance,
     Local,
     Project,
     // generics label
-    Generics,
-    Of,
-    Specific,
-    Alias,
+    Generic,
     // mutability
     Mutable,
-    Immutable,
 }
 
 impl Keyword {
@@ -61,16 +58,17 @@ impl Keyword {
             "becomes" => Some(Keyword::Becomes),
             "labels" => Some(Keyword::Labels),
             "body" => Some(Keyword::Body),
+            "initially" => Some(Keyword::Initially),
             "visibility" => Some(Keyword::Visibility),
             "public" => Some(Keyword::Public),
             "private" => Some(Keyword::Private),
+            "folder" => Some(Keyword::Folder),
+            "subfolders" => Some(Keyword::Subfolders),
+            "package" => Some(Keyword::Package),
             "value" => Some(Keyword::Value),
             "function" => Some(Keyword::Function),
-            "blueprint" => Some(Keyword::Blueprint),
-            "singleton" => Some(Keyword::Singleton),
-            "container" => Some(Keyword::Container),
-            "alias" => Some(Keyword::Alias),
             "type" => Some(Keyword::Type),
+            "singleton" => Some(Keyword::Singleton),
             "none" => Some(Keyword::None),
             "return" => Some(Keyword::Return),
             "parameters" => Some(Keyword::Parameters),
@@ -84,17 +82,14 @@ impl Keyword {
             "implementation" => Some(Keyword::Implementation),
             "full" => Some(Keyword::Full),
             "partial" => Some(Keyword::Partial),
+            "inherited" => Some(Keyword::Inherited),
             "contract" => Some(Keyword::Contract),
-            "filled" => Some(Keyword::Filled),
             "scope" => Some(Keyword::Scope),
             "instance" => Some(Keyword::Instance),
             "local" => Some(Keyword::Local),
             "project" => Some(Keyword::Project),
-            "generics" => Some(Keyword::Generics),
-            "of" => Some(Keyword::Of),
-            "specific" => Some(Keyword::Specific),
+            "generic" => Some(Keyword::Generic),
             "mutable" => Some(Keyword::Mutable),
-            "immutable" => Some(Keyword::Immutable),
             _ => None,
         }
     }
@@ -105,16 +100,17 @@ impl Keyword {
             Keyword::Becomes => 7,
             Keyword::Labels => 6,
             Keyword::Body => 4,
+            Keyword::Initially => 9,
             Keyword::Visibility => 10,
             Keyword::Public => 6,
             Keyword::Private => 7,
+            Keyword::Folder => 6,
+            Keyword::Subfolders => 10,
+            Keyword::Package => 7,
             Keyword::Value => 5,
             Keyword::Function => 8,
-            Keyword::Blueprint => 9,
-            Keyword::Singleton => 9,
-            Keyword::Container => 9,
-            Keyword::Alias => 5,
             Keyword::Type => 4,
+            Keyword::Singleton => 9,
             Keyword::None => 4,
             Keyword::Parameters => 10,
             Keyword::Return => 6,
@@ -128,17 +124,14 @@ impl Keyword {
             Keyword::Implementation => 14,
             Keyword::Full => 4,
             Keyword::Partial => 7,
+            Keyword::Inherited => 9,
             Keyword::Contract => 8,
-            Keyword::Filled => 6,
             Keyword::Scope => 5,
             Keyword::Instance => 8,
             Keyword::Local => 5,
             Keyword::Project => 7,
-            Keyword::Generics => 8,
-            Keyword::Of => 2,
-            Keyword::Specific => 8,
+            Keyword::Generic => 7,
             Keyword::Mutable => 7,
-            Keyword::Immutable => 9,
         }
     }
 }
@@ -175,14 +168,14 @@ mod tests {
     }
 
     #[test]
-    fn test_variable_keywords() {
-        assert_eq!(keyword_from("means"), Some(Keyword::Means));
+    fn test_mutation_keywords() {
         assert_eq!(keyword_from("becomes"), Some(Keyword::Becomes));
     }
 
     #[test]
     fn test_control_flow_keywords() {
         assert_eq!(keyword_from("if"), Some(Keyword::If));
+        assert_eq!(keyword_from("then"), Some(Keyword::Then));
         assert_eq!(keyword_from("else"), Some(Keyword::Else));
         assert_eq!(keyword_from("while"), Some(Keyword::While));
         assert_eq!(keyword_from("return"), Some(Keyword::Return));
@@ -190,32 +183,42 @@ mod tests {
 
     #[test]
     fn test_declaration_keywords() {
-        assert_eq!(keyword_from("is"), Some(Keyword::Is));
+        assert_eq!(keyword_from("let"), Some(Keyword::Let));
         assert_eq!(keyword_from("value"), Some(Keyword::Value));
         assert_eq!(keyword_from("function"), Some(Keyword::Function));
-        assert_eq!(keyword_from("blueprint"), Some(Keyword::Blueprint));
+        assert_eq!(keyword_from("type"), Some(Keyword::Type));
         assert_eq!(keyword_from("singleton"), Some(Keyword::Singleton));
         assert_eq!(keyword_from("parameters"), Some(Keyword::Parameters));
+        assert_eq!(keyword_from("initially"), Some(Keyword::Initially));
     }
 
     #[test]
-    fn test_type_keywords() {
-        assert_eq!(keyword_from("type"), Some(Keyword::Type));
-        assert_eq!(keyword_from("returns"), Some(Keyword::Returns));
-        assert_eq!(keyword_from("generics"), Some(Keyword::Generics));
-        assert_eq!(keyword_from("of"), Some(Keyword::Of));
+    fn test_block_keywords() {
+        assert_eq!(keyword_from("labels"), Some(Keyword::Labels));
+        assert_eq!(keyword_from("body"), Some(Keyword::Body));
     }
 
     #[test]
-    fn test_logical_keywords() {
-        assert_eq!(keyword_from("and"), Some(Keyword::And));
-        assert_eq!(keyword_from("or"), Some(Keyword::Or));
-        assert_eq!(keyword_from("not"), Some(Keyword::Not));
+    fn test_label_keywords() {
+        assert_eq!(keyword_from("generic"), Some(Keyword::Generic));
+        assert_eq!(keyword_from("mutable"), Some(Keyword::Mutable));
+        assert_eq!(keyword_from("visibility"), Some(Keyword::Visibility));
+        assert_eq!(keyword_from("scope"), Some(Keyword::Scope));
+        assert_eq!(keyword_from("implementation"), Some(Keyword::Implementation));
+        assert_eq!(keyword_from("contract"), Some(Keyword::Contract));
+    }
+
+    #[test]
+    fn test_visibility_keywords() {
+        assert_eq!(keyword_from("public"), Some(Keyword::Public));
+        assert_eq!(keyword_from("private"), Some(Keyword::Private));
+        assert_eq!(keyword_from("folder"), Some(Keyword::Folder));
+        assert_eq!(keyword_from("subfolders"), Some(Keyword::Subfolders));
+        assert_eq!(keyword_from("package"), Some(Keyword::Package));
     }
 
     #[test]
     fn test_scope_keywords() {
-        assert_eq!(keyword_from("scope"), Some(Keyword::Scope));
         assert_eq!(keyword_from("instance"), Some(Keyword::Instance));
         assert_eq!(keyword_from("local"), Some(Keyword::Local));
         assert_eq!(keyword_from("project"), Some(Keyword::Project));
@@ -223,11 +226,17 @@ mod tests {
 
     #[test]
     fn test_implementation_keywords() {
-        assert_eq!(keyword_from("implementation"), Some(Keyword::Implementation));
-        assert_eq!(keyword_from("declared"), Some(Keyword::Declared));
         assert_eq!(keyword_from("full"), Some(Keyword::Full));
         assert_eq!(keyword_from("partial"), Some(Keyword::Partial));
-        assert_eq!(keyword_from("contracted"), Some(Keyword::Contracted));
+        assert_eq!(keyword_from("none"), Some(Keyword::None));
+        assert_eq!(keyword_from("inherited"), Some(Keyword::Inherited));
+    }
+
+    #[test]
+    fn test_logical_keywords() {
+        assert_eq!(keyword_from("and"), Some(Keyword::And));
+        assert_eq!(keyword_from("or"), Some(Keyword::Or));
+        assert_eq!(keyword_from("not"), Some(Keyword::Not));
     }
 
     #[test]
@@ -239,6 +248,15 @@ mod tests {
     }
 
     #[test]
+    fn test_deprecated_not_keywords() {
+        assert_eq!(keyword_from("blueprint"), None);
+        assert_eq!(keyword_from("container"), None);
+        assert_eq!(keyword_from("alias"), None);
+        assert_eq!(keyword_from("immutable"), None);
+        assert_eq!(keyword_from("generics"), None);
+    }
+
+    #[test]
     fn test_case_sensitive() {
         assert_eq!(keyword_from("If"), None);
         assert_eq!(keyword_from("TRUE"), None);
@@ -247,9 +265,7 @@ mod tests {
 
     #[test]
     fn test_keyword_with_trailing_chars() {
-        // "isFoo" should read the whole word "isFoo" and not match any keyword
         assert_eq!(keyword_from("isFoo"), None);
-        // "if " should read "if" (stops at space) and match
         let input: Vec<char> = "if ".chars().collect();
         assert_eq!(Keyword::from(|i| input.get(i).copied()), Some(Keyword::If));
     }
@@ -259,8 +275,9 @@ mod tests {
         assert_eq!(Keyword::If.declaration_size(), 2);
         assert_eq!(Keyword::While.declaration_size(), 5);
         assert_eq!(Keyword::Implementation.declaration_size(), 14);
-        assert_eq!(Keyword::Is.declaration_size(), 2);
         assert_eq!(Keyword::Parameters.declaration_size(), 10);
+        assert_eq!(Keyword::Generic.declaration_size(), 7);
+        assert_eq!(Keyword::Initially.declaration_size(), 9);
     }
 
     #[test]

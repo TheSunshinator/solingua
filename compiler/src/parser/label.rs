@@ -1,3 +1,4 @@
+use crate::lexer::comparison::{ComparisonOperator, ComparisonOrientation};
 use crate::lexer::keyword::Keyword;
 use crate::lexer::literal::{Literal, StringLiteral};
 use crate::lexer::symbol::{Symbol, Bound};
@@ -104,27 +105,36 @@ impl Parser {
     }
 
     fn parse_label_generics(&mut self) -> LabelDefinition {
+        let open_angle = Token::ComparisonOperator(ComparisonOperator {
+            checks_equality: false,
+            orientation: Some(ComparisonOrientation::LessThan),
+        });
+        let close_angle = Token::ComparisonOperator(ComparisonOperator {
+            checks_equality: false,
+            orientation: Some(ComparisonOrientation::GreaterThan),
+        });
+
         let span = self.current_span();
-        if !self.check(&Token::Keyword(Keyword::Generics)) {
+        if !self.check(&Token::Keyword(Keyword::Generic)) {
             return LabelDefinition { label: Label::Generics(Trivalent::NotApplicable), span };
         }
         self.advance();
-        self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Opening)));
+        self.expect_token(&open_angle);
 
-        let trivalent = if self.check(&Token::Symbol(Symbol::Bracket(Bound::Closing))) {
+        let trivalent = if self.check(&close_angle) {
             Trivalent::None
         } else {
             let mut generics = vec![self.expect_identifier()];
             while self.check(&Token::Symbol(Symbol::Comma)) {
                 self.advance();
-                if !self.check(&Token::Symbol(Symbol::Bracket(Bound::Closing))) {
+                if !self.check(&close_angle) {
                     generics.push(self.expect_identifier());
                 }
             }
             Trivalent::Some(generics)
         };
 
-        self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Closing)));
+        self.expect_token(&close_angle);
         self.skip_comma();
         LabelDefinition { label: Label::Generics(trivalent), span }
     }
@@ -194,6 +204,20 @@ mod tests {
     use super::*;
     use crate::lexer::SpannedToken;
 
+    fn open_angle() -> Token {
+        Token::ComparisonOperator(ComparisonOperator {
+            checks_equality: false,
+            orientation: Some(ComparisonOrientation::LessThan),
+        })
+    }
+
+    fn close_angle() -> Token {
+        Token::ComparisonOperator(ComparisonOperator {
+            checks_equality: false,
+            orientation: Some(ComparisonOrientation::GreaterThan),
+        })
+    }
+
     fn parser_from_tokens(tokens: Vec<Token>) -> Parser {
         let spanned: Vec<SpannedToken> = tokens
             .into_iter()
@@ -257,23 +281,29 @@ mod tests {
     }
 
     #[test]
-    fn test_mutable() {
+    fn test_mutable_true() {
         let mut parser = parser_from_tokens(label_tokens(vec![
             Token::Keyword(Keyword::Mutable),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Literal(Literal::Boolean(true)),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[1].label, Label::Mutability(Trivalent::Some(true)));
+        assert_eq!(labels[2].label, Label::Mutability(Trivalent::Some(true)));
     }
 
     #[test]
-    fn test_immutable() {
+    fn test_mutable_false() {
         let mut parser = parser_from_tokens(label_tokens(vec![
-            Token::Keyword(Keyword::Immutable),
+            Token::Keyword(Keyword::Mutable),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Literal(Literal::Boolean(false)),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[1].label, Label::Mutability(Trivalent::Some(false)));
+        assert_eq!(labels[2].label, Label::Mutability(Trivalent::Some(false)));
     }
 
     #[test]
@@ -286,7 +316,7 @@ mod tests {
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[2].label, Label::Visibility(Trivalent::Some("public".to_string())));
+        assert_eq!(labels[3].label, Label::Visibility(Trivalent::Some("public".to_string())));
     }
 
     #[test]
@@ -299,34 +329,34 @@ mod tests {
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[3].label, Label::Scope(Trivalent::Some("project".to_string())));
+        assert_eq!(labels[4].label, Label::Scope(Trivalent::Some("project".to_string())));
     }
 
     #[test]
     fn test_generics_empty() {
         let mut parser = parser_from_tokens(label_tokens(vec![
-            Token::Keyword(Keyword::Generics),
-            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
-            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+            Token::Keyword(Keyword::Generic),
+            open_angle(),
+            close_angle(),
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[4].label, Label::Generics(Trivalent::None));
+        assert_eq!(labels[1].label, Label::Generics(Trivalent::None));
     }
 
     #[test]
     fn test_generics_with_types() {
         let mut parser = parser_from_tokens(label_tokens(vec![
-            Token::Keyword(Keyword::Generics),
-            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Keyword(Keyword::Generic),
+            open_angle(),
             Token::Identifier("T".to_string()),
             Token::Symbol(Symbol::Comma),
             Token::Identifier("U".to_string()),
-            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+            close_angle(),
             Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[4].label, Label::Generics(Trivalent::Some(vec![
+        assert_eq!(labels[1].label, Label::Generics(Trivalent::Some(vec![
             "T".to_string(), "U".to_string(),
         ])));
     }
@@ -359,10 +389,19 @@ mod tests {
 
     #[test]
     fn test_full_hello_sol_labels() {
-        // return(), visibility(public), scope(project), generics(), immutable,
+        // return(), generic[], mutable(false), visibility(public), scope(project),
         let mut parser = parser_from_tokens(label_tokens(vec![
             Token::Keyword(Keyword::Return),
             Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+            Token::Symbol(Symbol::Comma),
+            Token::Keyword(Keyword::Generic),
+            open_angle(),
+            close_angle(),
+            Token::Symbol(Symbol::Comma),
+            Token::Keyword(Keyword::Mutable),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Literal(Literal::Boolean(false)),
             Token::Symbol(Symbol::Parentheses(Bound::Closing)),
             Token::Symbol(Symbol::Comma),
             Token::Keyword(Keyword::Visibility),
@@ -375,19 +414,13 @@ mod tests {
             Token::Keyword(Keyword::Project),
             Token::Symbol(Symbol::Parentheses(Bound::Closing)),
             Token::Symbol(Symbol::Comma),
-            Token::Keyword(Keyword::Generics),
-            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
-            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
-            Token::Symbol(Symbol::Comma),
-            Token::Keyword(Keyword::Immutable),
-            Token::Symbol(Symbol::Comma),
         ]));
         let labels = parser.parse_label_declaration();
         assert_eq!(labels[0].label, Label::Return(Trivalent::None));
-        assert_eq!(labels[1].label, Label::Mutability(Trivalent::Some(false)));
-        assert_eq!(labels[2].label, Label::Visibility(Trivalent::Some("public".to_string())));
-        assert_eq!(labels[3].label, Label::Scope(Trivalent::Some("project".to_string())));
-        assert_eq!(labels[4].label, Label::Generics(Trivalent::None));
+        assert_eq!(labels[1].label, Label::Generics(Trivalent::None));
+        assert_eq!(labels[2].label, Label::Mutability(Trivalent::Some(false)));
+        assert_eq!(labels[3].label, Label::Visibility(Trivalent::Some("public".to_string())));
+        assert_eq!(labels[4].label, Label::Scope(Trivalent::Some("project".to_string())));
         assert_eq!(labels[5].label, Label::Implementation(Trivalent::NotApplicable));
         assert_eq!(labels[6].label, Label::Contract(Trivalent::NotApplicable));
     }

@@ -224,10 +224,6 @@ impl Parser {
                                 self.advance();
                                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Opening)));
                                 type_name = self.expect_identifier();
-                                if self.check(&Token::Keyword(Keyword::Of)) {
-                                    self.advance();
-                                    type_argument = Some(self.expect_identifier());
-                                }
                                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                             }
                             Token::Symbol(Symbol::Comma) => { self.advance(); }
@@ -468,10 +464,10 @@ impl Parser {
         if !self.check(&Token::Symbol(Symbol::Brace(Bound::Opening))) {
             let condition = self.parse_expression();
             self.expect_token(&Token::Keyword(Keyword::Then));
-            let then_value = self.parse_primary_expression();
+            let then_value = self.parse_expression();
 
             self.expect_token(&Token::Keyword(Keyword::Else));
-            let else_value = self.parse_primary_expression();
+            let else_value = self.parse_expression();
 
             return Expression::IfExpression {
                 branches: vec![ConditionBranch { condition, result: then_value }],
