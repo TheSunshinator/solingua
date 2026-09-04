@@ -42,6 +42,20 @@ solingua --verbose <source.sol>
 
 Prints the full compilation pipeline: lexer output, abstract syntax tree, and generated assembly.
 
+## Examples
+
+Run any example:
+
+```bash
+solingua examples/hello.sol
+./examples/hello
+```
+
+Available examples:
+
+- `hello.sol` — Hello world
+- `factorial.sol` — Recursion
+
 ## Definitions
 Here is a table with some definition of the meaning of some words in the context of Solingua
 
@@ -64,7 +78,7 @@ genericTypeIdentifiers = identifier , ("return[" , typeIdentifier , ("&" , typeI
 ```
 
 ### Labels
-Labels are places after a declaration, separated by commas. They should appear in the following order.
+Labels are places in a `labels[]` list, as the first line in declarations, separated by commas. They should appear in the following order.
 Some are optional depending on the context
 - return
 - generic
@@ -105,7 +119,7 @@ Label required for types and functions constructs declaring generic types that t
 
 Grammar:
 ```
-genericLabel = "generic(" , (genericTypeIdentifiers , ("," , genericTypeIdentifiers)*) , "), " ;
+genericLabel = "generic<" , (genericTypeIdentifiers , ("," , genericTypeIdentifiers)*) , ">, " ;
 ```
 
 Example: 
@@ -125,6 +139,8 @@ Required label that denotes a construct that can be mutated or not. On a functio
 |   value   |  Value can be reassigned   |
 | function  | Function can be overridden |
 |   type    |    Type can be extended    |
+
+**TODO: Integrate new label for openness to be overridden**
 
 Grammar: `mutabilityLabel = "mutable(" , ("true" | "false") , "), " ;`
 
@@ -152,7 +168,7 @@ it defined what other constructs can access this one.
 |:----------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |  private   | For constructs declared directly in files, it can only be accessed by other construct in that file.<br/>For constructs in a type construct, it can only be accessed from within that type. |
 |   public   | No restriction                                                                                                                                                                             |
-|   folder   | Can be accessed from any construct defined in the same folder                                                                                   Type can be extended                       |
+|   folder   | Can be accessed from any construct defined in the same folder                                                                                                                              |
 | subfolders | Can be accessed from any construct defined in the same folder or subfolders                                                                                                                |
 |  package   | Can only be accessed from within this package                                                                                                                                              |
 |  contract  | Can only be accessed from child types                                                                                                                                                      |
@@ -185,7 +201,7 @@ Required for constructs with a `scope(instance)`. Used to determine at what degr
 |      none      | The construct is declared, but provides no implementation                                            |
 |   inherited    | The construct is declared, but provides no implementation. The ancestor does and is unchanged.       |
 
-Grammar: `implementationLabel = "implementation(" , { "full" | "partial" | "none" } , "), " ;`
+Grammar: `implementationLabel = "implementation(" , { "full" | "partial" | "none" | "inherited" } , "), " ;`
 
 Example: ```labels[…, implementation(partial), …]```
 
@@ -251,7 +267,7 @@ Grammar:
 ```
 "let value " , identifier , "{" ,
   labels ,
-  ("initially(" , statement , ")"
+  ("initially(" , statement , ")")
 "}"
 ```
 
@@ -418,17 +434,19 @@ printLine(cat.name)
 ```
 let singleton Red {
     labels[return(), visibility(public), scope(project)]
+    instance { … }
 }
-let singleton Red {
+let singleton Green {
     labels[return(), visibility(public), scope(project)]
+    instance { … }
 }
-let singleton Red {
+let singleton Blue {
     labels[return(), visibility(public), scope(project)]
+    instance { … }
 }
 ```
 
 Singletons are unique identity values with no fields or methods. Compare with `=`.
-
 
 ### Built-in functions
 
@@ -437,16 +455,199 @@ Singletons are unique identity values with no fields or methods. Compare with `=
 | `printLine(value)` | Prints a value followed by a newline. Accepts String, Integer, and Boolean. |
 | `readInput()`      | Wait for user input from the console                                        |
 
-## Examples
+### TODO
+- Change `mutation` label for types as it's ambiguous on their values: 
+is the value mutable or the value can be overriden? Maybe `descendants(local | none | any)`
+where local means it's a sealed type, none means it's a final type, and any means it's an open type
+- Block features reserved for language
+  - Loops
+  - Variables
+  - Casting
+  - Singletons out of enumerations (do Solingua even need it?)
+- Add parent type that is inherited by all types (ex: Any, Object, Whatever)
+- Proper versioning
+- Variable-length argument (`...`?, new label?)
+- Comments (`!!`?)
 
-Run any example:
+### Future Features
+Anything listed below is subject to changes or even being abandoned entirely
 
-```bash
-solingua examples/hello.sol
-./examples/hello
+#### Folder + Imports
+```
+let folder { com.sunshinater.solingua }
+
+use[
+    com.sunshinator.solingua.Either,
+    com.sunshinator.solingua.Sequence,
+]
+```
+Nested imports as syntax sugar in the IDE
+No wildcard
+
+#### Calling super
+Call the parent implementation. Required
+```
+ascendant(); !! Option 1, fits with `descendants` label
+default(); !! Option 2
+inherited(); !! Option 3, keyword already exists
+
 ```
 
-Available examples:
+#### Getter/Setter
+```
+let value highScore {
+  labels[...]
+  initially(0)
+  onGet {
+    printLine(value);
+  }
+  onSet {
+    printLine(...);
+    value becomes new;
+    printLine(...);
+  }
+}
+```
+Open questions:
+  - Are getter/setter against philosophy?
+  - Can we make all variables accessible via Rx structure?
+  - If we can, what about setters? We'll have 2 completely different get / set syntax
 
-- `hello.sol` — Hello world
-- `factorial.sol` — Recursion
+#### Trailing Functions
+Functions are essentially lambdas, or should be. When passing them as last parameter,
+add a `trailing(true|false)` to force the usage as trailing, if not identifier
+```
+list.map() { it.toString() }
+list.map(toString)
+```
+Open questions:
+- This won't work in .sol files, but might work with the IDE as syntax sugar
+
+#### Extensions
+```
+let function isValidEmail {
+  parameters {
+    let value subject {
+      labels[return(String), …, scope(project), …, ]
+    }
+  }
+  body { … }
+}
+
+"someString".isValidEmail()
+```
+
+Open questions:
+- `subject` as keyword or new `subject(true|false)` label?
+
+#### Anonymous Instantiation
+```
+listeners.add(
+    let function {
+        labels[…]
+        body { … }
+    }
+)
+
+list.add(
+    let type {
+        labels[return(Animal), …]
+        instance { … }
+    }()
+)
+```
+
+#### Enumerations
+```
+let enumeration Event {
+    labels[…]
+    parameters {} !! Constructor parameters
+    instance { … } !! Contracts and partial implementations
+    list[
+        let singleton BackRequested { … }
+        let type SaveClicked { … }
+    ]
+}
+``` 
+
+#### Negated label
+Let the compiler know that this value/function that returns a Boolean 
+must have a negated equivalent with the given name.
+```
+let value isXmas {
+    labels[return(Boolean), …, negated("isNotXmas"), …]
+    initially(false)
+}
+
+printLine(isNotXmas)
+
+let function isValid {
+    labels[return(Boolean), …, negated("isInvalid"), …]
+    body { … }
+}
+
+printLine(isInvalid())
+```
+
+#### Standard Library
+##### Iteration
+- Sequences
+- `iterable.forEach() { … }`
+- `iterable.fold(initialValue) { … }`
+- `iterable.map() { … }`
+- `iterable.find() { … }`
+- `iterable.filter() { … }`
+
+##### Utilities
+- Option type
+- Either type
+- Result type
+- Variable wrapper for Rx
+```
+let value whatever {
+    labels[return(Mutable<String>), mutable(false), …]
+    initially(Mutable(""))
+}
+
+value.onChange(…)
+```
+- Rx / Flow
+- Dependency Injection library built-in
+- Monad
+  - Require support for `scope(type)` with `implementation(none)`
+
+#### Other Ideas
+- Extension blocks for types
+- #ifdef equivalent and/or build variants
+
+### IDE Plugin
+The IDE plugin will show the developer something completely different to hide the noise.
+The developer will be able to hover definitions to see all hidden labels, empty blocks, or
+anything inferred. `factorial.sol` would actually render like this:
+```
+#public
+factorial: Integer is { [n: Integer]
+    return if n = 0 then 0 else factorial(n - 1)
+}
+```
+A value would look like the following:
+```
+isValid: Boolean is true !! immutable unless explicitely marked
+
+#mutable
+counter: Integer is 0
+```
+A type would look like the following:
+```
+#public
+Cat: Animal, SomeOtherType is { [name: String]
+    #contracted
+    this.name is name
+  
+    #contracted
+    speak is { printLine("Meow") }
+}
+```
+The goal is to make this parametrized so that the user can tweek what is shown.
+If he doesn't want to see the return types? Turn it off.
+If he wants to change a keyword to a symbol? No problem
