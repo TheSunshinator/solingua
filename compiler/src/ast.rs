@@ -154,6 +154,7 @@ pub enum ComparisonOperator {
     LessThan,
     LessThanOrEqual,
     Equal,
+    NotEqual,
 }
 
 /// Arithmetic operators

@@ -855,6 +855,9 @@ impl CodeGenerator {
                     ComparisonOperator::Equal => {
                         self.emit(&format!("    b.ne {else_label}"));
                     }
+                    ComparisonOperator::NotEqual => {
+                        self.emit(&format!("    b.eq {else_label}"));
+                    }
                 }
             }
             _ => {
@@ -894,6 +897,7 @@ impl CodeGenerator {
             ComparisonOperator::LessThan => "b.lt",
             ComparisonOperator::LessThanOrEqual => "b.le",
             ComparisonOperator::Equal => "b.eq",
+            ComparisonOperator::NotEqual => "b.ne",
         };
         self.emit(&format!("    {branch_instruction} {true_label}"));
         self.emit("    mov x0, #0");

@@ -1,38 +1,45 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComparisonOperator {
     pub checks_equality: bool,
-    pub orientation: Option<ComparisonOrientation>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ComparisonOrientation {
-    GreaterThan,
-    LessThan,
+    pub negated: bool,
+    pub checks_smaller_than: bool,
 }
 
 impl ComparisonOperator {
-    pub fn from(character: char, next_character: Option<char>) -> Option<Self> {
-        let orientation = match character {
-            '<' => Some(ComparisonOrientation::LessThan),
-            '>' => Some(ComparisonOrientation::GreaterThan),
-            '=' => None,
+    pub fn from(character: char) -> Option<Self> {
+        return match character {
+            '=' => Some(ComparisonOperator {
+                checks_equality: true,
+                negated: false,
+                checks_smaller_than: false,
+            }),
+            '≠' => Some(ComparisonOperator {
+                checks_equality: true,
+                negated: true,
+                checks_smaller_than: false,
+            }),
+            '<' => Some(ComparisonOperator {
+                checks_equality: false,
+                negated: false,
+                checks_smaller_than: true,
+            }),
+            '>' => Some(ComparisonOperator {
+                checks_equality: true,
+                negated: true,
+                checks_smaller_than: true,
+            }),
+            '≤' => Some(ComparisonOperator {
+                checks_equality: true,
+                negated: false,
+                checks_smaller_than: true,
+            }),
+            '≥' => Some(ComparisonOperator {
+                checks_equality: false,
+                negated: true,
+                checks_smaller_than: true,
+            }),
             _ => return None,
         };
-
-        let checks_equality = character == '=' || next_character == Some('=');
-
-        Some(ComparisonOperator {
-            checks_equality,
-            orientation,
-        })
-    }
-
-    pub fn declaration_size(&self) -> usize {
-        if self.checks_equality && self.orientation.is_some() {
-            2 // >= or <=
-        } else {
-            1 // >, <, or =
-        }
     }
 }
 
@@ -41,59 +48,63 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_greater_than() {
-        let result = ComparisonOperator::from('>', Some(' '));
-        assert_eq!(result, Some(ComparisonOperator {
-            checks_equality: false,
-            orientation: Some(ComparisonOrientation::GreaterThan),
+    fn test_equal() {
+        assert_eq!(ComparisonOperator::from('='), Some(ComparisonOperator {
+            checks_equality: true,
+            negated: false,
+            checks_smaller_than: false,
         }));
-        assert_eq!(result.unwrap().declaration_size(), 1);
     }
 
     #[test]
-    fn test_greater_than_or_equal() {
-        let result = ComparisonOperator::from('>', Some('='));
-        assert_eq!(result, Some(ComparisonOperator {
+    fn test_not_equal() {
+        assert_eq!(ComparisonOperator::from('≠'), Some(ComparisonOperator {
             checks_equality: true,
-            orientation: Some(ComparisonOrientation::GreaterThan),
+            negated: true,
+            checks_smaller_than: false,
         }));
-        assert_eq!(result.unwrap().declaration_size(), 2);
     }
 
     #[test]
     fn test_less_than() {
-        let result = ComparisonOperator::from('<', Some(' '));
-        assert_eq!(result, Some(ComparisonOperator {
+        assert_eq!(ComparisonOperator::from('<'), Some(ComparisonOperator {
             checks_equality: false,
-            orientation: Some(ComparisonOrientation::LessThan),
+            negated: false,
+            checks_smaller_than: true,
         }));
-        assert_eq!(result.unwrap().declaration_size(), 1);
+    }
+
+    #[test]
+    fn test_greater_than() {
+        assert_eq!(ComparisonOperator::from('>'), Some(ComparisonOperator {
+            checks_equality: true,
+            negated: true,
+            checks_smaller_than: true,
+        }));
     }
 
     #[test]
     fn test_less_than_or_equal() {
-        let result = ComparisonOperator::from('<', Some('='));
-        assert_eq!(result, Some(ComparisonOperator {
+        assert_eq!(ComparisonOperator::from('≤'), Some(ComparisonOperator {
             checks_equality: true,
-            orientation: Some(ComparisonOrientation::LessThan),
+            negated: false,
+            checks_smaller_than: true,
         }));
-        assert_eq!(result.unwrap().declaration_size(), 2);
     }
 
     #[test]
-    fn test_equal() {
-        let result = ComparisonOperator::from('=', Some(' '));
-        assert_eq!(result, Some(ComparisonOperator {
-            checks_equality: true,
-            orientation: None,
+    fn test_greater_than_or_equal() {
+        assert_eq!(ComparisonOperator::from('≥'), Some(ComparisonOperator {
+            checks_equality: false,
+            negated: true,
+            checks_smaller_than: true,
         }));
-        assert_eq!(result.unwrap().declaration_size(), 1);
     }
 
     #[test]
     fn test_not_a_comparison() {
-        assert_eq!(ComparisonOperator::from('a', None), None);
-        assert_eq!(ComparisonOperator::from('+', None), None);
-        assert_eq!(ComparisonOperator::from('.', None), None);
+        assert_eq!(ComparisonOperator::from('a'), None);
+        assert_eq!(ComparisonOperator::from('+'), None);
+        assert_eq!(ComparisonOperator::from('.'), None);
     }
 }

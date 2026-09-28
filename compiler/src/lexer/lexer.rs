@@ -41,8 +41,7 @@ impl Lexer {
             r#""(?:[^"\\]|\\.)*""#,   // strings (with escaped chars)
             r"|[a-zA-Z_][a-zA-Z0-9_]*", // words (identifiers/keywords)
             r"|\d+",                     // integers
-            r"|>=|<=",                   // two-char comparison operators
-            r"|[><=(){}\[\],+\-*/;.]",    // single-char symbols and operators
+            r"|[><=≥≤≠(){}\[\],+\-×/;.#|&𝑓⟨⟩∧∨¬]",  // single-char symbols and operators
         )).unwrap();
 
         let mut tokens = Vec::new();
@@ -77,15 +76,13 @@ impl Lexer {
     fn classify(chunk: &str) -> Token {
         let chars: Vec<char> = chunk.chars().collect();
 
-        if let Some(symbol) = Symbol::from(chars[0]) {
-            if chars.len() == 1 {
-                return Token::Symbol(symbol);
-            }
-        }
-
-        if let Some(operator) = ComparisonOperator::from(chars[0], chars.get(1).copied()) {
-            if chars[0] == '>' || chars[0] == '<' || chars[0] == '=' {
+        if chars.len() == 1 {
+            if let Some(operator) = ComparisonOperator::from(chars[0]) {
                 return Token::ComparisonOperator(operator);
+            }
+
+            if let Some(symbol) = Symbol::from(chars[0]) {
+                return Token::Symbol(symbol);
             }
         }
 
@@ -114,7 +111,7 @@ mod tests {
     use super::*;
     use super::super::literal::StringLiteral;
     use super::super::symbol::{Arithmetic, Bound};
-    use super::super::comparison::ComparisonOrientation;
+
 
     fn tokenize(input: &str) -> Vec<Token> {
         Lexer::new(input).tokenize().into_iter().map(|st| st.token).collect()
@@ -202,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_arithmetic_symbols() {
-        assert_eq!(tokenize("+ - * /"), vec![
+        assert_eq!(tokenize("+ - × /"), vec![
             Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus)),
             Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus)),
             Token::Symbol(Symbol::Arithmetic(Arithmetic::Times)),
@@ -213,26 +210,36 @@ mod tests {
 
     #[test]
     fn test_comparison_operators() {
-        let tokens = tokenize("> >= < <= =");
+        let tokens = tokenize("> ≥ < ≤ = ≠");
         assert_eq!(tokens[0], Token::ComparisonOperator(ComparisonOperator {
-            checks_equality: false,
-            orientation: Some(ComparisonOrientation::GreaterThan),
+            checks_equality: true,
+            negated: true,
+            checks_smaller_than: true,
         }));
         assert_eq!(tokens[1], Token::ComparisonOperator(ComparisonOperator {
-            checks_equality: true,
-            orientation: Some(ComparisonOrientation::GreaterThan),
+            checks_equality: false,
+            negated: true,
+            checks_smaller_than: true,
         }));
         assert_eq!(tokens[2], Token::ComparisonOperator(ComparisonOperator {
             checks_equality: false,
-            orientation: Some(ComparisonOrientation::LessThan),
+            negated: false,
+            checks_smaller_than: true,
         }));
         assert_eq!(tokens[3], Token::ComparisonOperator(ComparisonOperator {
             checks_equality: true,
-            orientation: Some(ComparisonOrientation::LessThan),
+            negated: false,
+            checks_smaller_than: true,
         }));
         assert_eq!(tokens[4], Token::ComparisonOperator(ComparisonOperator {
             checks_equality: true,
-            orientation: None,
+            negated: false,
+            checks_smaller_than: false,
+        }));
+        assert_eq!(tokens[5], Token::ComparisonOperator(ComparisonOperator {
+            checks_equality: true,
+            negated: true,
+            checks_smaller_than: false,
         }));
     }
 
@@ -286,18 +293,17 @@ mod tests {
     }
 
     #[test]
-    fn test_full_statement() {
-        let tokens = tokenize("let value counter { labels[return(Integer), scope(local), ] initially(0) }");
+    fn test_full_value_declaration() {
+        let tokens = tokenize("let value counter { #return(Integer) #mutable(false) #scope(local) #implementation(full); initially 0 }");
         assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
         assert_eq!(tokens[1], Token::Keyword(Keyword::Value));
         assert_eq!(tokens[2], Token::Identifier("counter".to_string()));
         assert_eq!(tokens[3], Token::Symbol(Symbol::Brace(Bound::Opening)));
-        assert_eq!(tokens[4], Token::Keyword(Keyword::Labels));
-        assert_eq!(tokens[5], Token::Symbol(Symbol::Bracket(Bound::Opening)));
-        assert_eq!(tokens[6], Token::Keyword(Keyword::Return));
-        assert_eq!(tokens[11], Token::Keyword(Keyword::Scope));
-        assert_eq!(tokens[16], Token::Symbol(Symbol::Bracket(Bound::Closing)));
-        assert_eq!(tokens[17], Token::Keyword(Keyword::Initially));
+        assert_eq!(tokens[4], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[5], Token::Keyword(Keyword::Return));
+        assert_eq!(tokens[6], Token::Symbol(Symbol::Parentheses(Bound::Opening)));
+        assert_eq!(tokens[7], Token::Identifier("Integer".to_string()));
+        assert_eq!(tokens[8], Token::Symbol(Symbol::Parentheses(Bound::Closing)));
     }
 
     #[test]
@@ -309,14 +315,57 @@ mod tests {
 
     #[test]
     fn test_comparison_no_spaces() {
-        assert_eq!(tokenize("a>=b"), vec![
+        assert_eq!(tokenize("a≥b"), vec![
             Token::Identifier("a".to_string()),
             Token::ComparisonOperator(ComparisonOperator {
-                checks_equality: true,
-                orientation: Some(ComparisonOrientation::GreaterThan),
+                checks_equality: false,
+                negated: true,
+                checks_smaller_than: true,
             }),
             Token::Identifier("b".to_string()),
             Token::EndOfFile,
         ]);
+    }
+
+    #[test]
+    fn test_logical_operators() {
+        use super::super::symbol::Logical;
+        assert_eq!(tokenize("¬x ∧ y ∨ z"), vec![
+            Token::Symbol(Symbol::Logical(Logical::Not)),
+            Token::Identifier("x".to_string()),
+            Token::Symbol(Symbol::Logical(Logical::And)),
+            Token::Identifier("y".to_string()),
+            Token::Symbol(Symbol::Logical(Logical::Or)),
+            Token::Identifier("z".to_string()),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_label_prefix() {
+        let tokens = tokenize("#return(Integer)");
+        assert_eq!(tokens[0], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Return));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Parentheses(Bound::Opening)));
+        assert_eq!(tokens[3], Token::Identifier("Integer".to_string()));
+        assert_eq!(tokens[4], Token::Symbol(Symbol::Parentheses(Bound::Closing)));
+    }
+
+    #[test]
+    fn test_function_symbol() {
+        let tokens = tokenize("let 𝑓 main");
+        assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Function));
+        assert_eq!(tokens[2], Token::Identifier("main".to_string()));
+    }
+
+    #[test]
+    fn test_generic_angle_brackets() {
+        let tokens = tokenize("#generic⟨T⟩");
+        assert_eq!(tokens[0], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Generic));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Generics(Bound::Opening)));
+        assert_eq!(tokens[3], Token::Identifier("T".to_string()));
+        assert_eq!(tokens[4], Token::Symbol(Symbol::Generics(Bound::Closing)));
     }
 }

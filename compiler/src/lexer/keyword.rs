@@ -3,7 +3,6 @@ pub enum Keyword {
     Let,
     Becomes,
     // declaration blocks
-    Labels,
     Body,
     Initially,
     // Visibility label
@@ -15,7 +14,6 @@ pub enum Keyword {
     Package,
     // What construct
     Value,
-    Function,
     Type,
     Singleton,
     // parameters label
@@ -26,10 +24,6 @@ pub enum Keyword {
     Then,
     Else,
     While,
-    // Boolean operators
-    And,
-    Or,
-    Not,
     // implementation label
     Implementation,
     Full,
@@ -56,7 +50,6 @@ impl Keyword {
         match word.as_str() {
             "let" => Some(Keyword::Let),
             "becomes" => Some(Keyword::Becomes),
-            "labels" => Some(Keyword::Labels),
             "body" => Some(Keyword::Body),
             "initially" => Some(Keyword::Initially),
             "visibility" => Some(Keyword::Visibility),
@@ -66,7 +59,6 @@ impl Keyword {
             "subfolders" => Some(Keyword::Subfolders),
             "package" => Some(Keyword::Package),
             "value" => Some(Keyword::Value),
-            "function" => Some(Keyword::Function),
             "type" => Some(Keyword::Type),
             "singleton" => Some(Keyword::Singleton),
             "none" => Some(Keyword::None),
@@ -76,9 +68,6 @@ impl Keyword {
             "then" => Some(Keyword::Then),
             "else" => Some(Keyword::Else),
             "while" => Some(Keyword::While),
-            "and" => Some(Keyword::And),
-            "or" => Some(Keyword::Or),
-            "not" => Some(Keyword::Not),
             "implementation" => Some(Keyword::Implementation),
             "full" => Some(Keyword::Full),
             "partial" => Some(Keyword::Partial),
@@ -98,7 +87,6 @@ impl Keyword {
         match self {
             Keyword::Let => 3,
             Keyword::Becomes => 7,
-            Keyword::Labels => 6,
             Keyword::Body => 4,
             Keyword::Initially => 9,
             Keyword::Visibility => 10,
@@ -108,7 +96,6 @@ impl Keyword {
             Keyword::Subfolders => 10,
             Keyword::Package => 7,
             Keyword::Value => 5,
-            Keyword::Function => 8,
             Keyword::Type => 4,
             Keyword::Singleton => 9,
             Keyword::None => 4,
@@ -118,9 +105,6 @@ impl Keyword {
             Keyword::Then => 4,
             Keyword::Else => 4,
             Keyword::While => 5,
-            Keyword::And => 3,
-            Keyword::Or => 2,
-            Keyword::Not => 3,
             Keyword::Implementation => 14,
             Keyword::Full => 4,
             Keyword::Partial => 7,
@@ -185,7 +169,6 @@ mod tests {
     fn test_declaration_keywords() {
         assert_eq!(keyword_from("let"), Some(Keyword::Let));
         assert_eq!(keyword_from("value"), Some(Keyword::Value));
-        assert_eq!(keyword_from("function"), Some(Keyword::Function));
         assert_eq!(keyword_from("type"), Some(Keyword::Type));
         assert_eq!(keyword_from("singleton"), Some(Keyword::Singleton));
         assert_eq!(keyword_from("parameters"), Some(Keyword::Parameters));
@@ -194,7 +177,6 @@ mod tests {
 
     #[test]
     fn test_block_keywords() {
-        assert_eq!(keyword_from("labels"), Some(Keyword::Labels));
         assert_eq!(keyword_from("body"), Some(Keyword::Body));
     }
 
@@ -233,10 +215,10 @@ mod tests {
     }
 
     #[test]
-    fn test_logical_keywords() {
-        assert_eq!(keyword_from("and"), Some(Keyword::And));
-        assert_eq!(keyword_from("or"), Some(Keyword::Or));
-        assert_eq!(keyword_from("not"), Some(Keyword::Not));
+    fn test_logical_no_longer_keywords() {
+        assert_eq!(keyword_from("and"), None);
+        assert_eq!(keyword_from("or"), None);
+        assert_eq!(keyword_from("not"), None);
     }
 
     #[test]
@@ -254,6 +236,8 @@ mod tests {
         assert_eq!(keyword_from("alias"), None);
         assert_eq!(keyword_from("immutable"), None);
         assert_eq!(keyword_from("generics"), None);
+        assert_eq!(keyword_from("function"), None);
+        assert_eq!(keyword_from("labels"), None);
     }
 
     #[test]

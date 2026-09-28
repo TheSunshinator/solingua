@@ -59,11 +59,11 @@ Available examples:
 ## Definitions
 Here is a table with some definition of the meaning of some words in the context of Solingua
 
-| Word | Definition |
-| :---: | :--- |
+|   Word    | Definition                                                                      |
+|:---------:|:--------------------------------------------------------------------------------|
 | Construct | Anything that can be declared in the language. A value, a function, a type, etc |
-| Folder | Refering to folders in the file system |
-| package | All files that are going to be compiled together in a single binary |
+|  Folder   | Refering to folders in the file system                                          |
+|  package  | All files that are going to be compiled together in a single binary             |
 
 
 ## Language Guide
@@ -78,7 +78,7 @@ genericTypeIdentifiers = identifier , ("return[" , typeIdentifier , ("&" , typeI
 ```
 
 ### Labels
-Labels are places in a `labels[]` list, as the first line in declarations, separated by commas. They should appear in the following order.
+Labels are places in a list as the first line in declarations. They should appear in the following order.
 Some are optional depending on the context
 - return
 - generic
@@ -90,10 +90,10 @@ Some are optional depending on the context
 
 Grammar: 
 ```
-labels = "labels[" , (identifier , labelParameters)*, "]" ;
+labels = ("#" , identifier , labelParameters)*, ";" ;
 labelParameters = labelParameterList | labelStandardParameter ;
 labelStandardParameter = "(" , identifier , ")" ;
-labelParameterList = "[" , identifier , "]" ;
+labelParameterList = "[" , identifier , ("|" , identifier)* , "]" ;
 ```
 
 #### return
@@ -105,12 +105,12 @@ Required label used to associate a (return) type to a construct. For values, it 
 | function  | Type returned by the function |
 |   type    |   Parent type and contracts   |
 
-Grammar: `returnLabel = "return(" , (typeIdentifier), "), " ;`
+Grammar: `returnLabel = "return(" , typeIdentifier , ")" ;`
 
 Examples: 
 ```
-labels[return(), …]
-labels[return(Integer), …]
+#return()
+#return(Integer)
 ```
 
 #### generic
@@ -119,16 +119,16 @@ Label required for types and functions constructs declaring generic types that t
 
 Grammar:
 ```
-genericLabel = "generic<" , (genericTypeIdentifiers , ("," , genericTypeIdentifiers)*) , ">, " ;
+genericLabel = "generic⟨" , (genericTypeIdentifiers , (", " , genericTypeIdentifiers)*) , "⟩" ;
 ```
 
 Example: 
 ```
-labels[…, generic[], …]
-labels[…, generic[T], …]
-labels[…, generic[T, U], …]
-labels[…, generic[T return ViewModel, U], …]
-labels[…, generic[T return ViewModel & Listener, U], …]
+#generic⟨⟩
+#generic⟨T⟩
+#generic⟨T, U⟩
+#generic⟨T return ViewModel, U⟩
+#generic⟨T return ViewModel & Listener, U⟩
 ```
 
 #### mutable
@@ -147,15 +147,15 @@ Grammar: `mutabilityLabel = "mutable(" , ("true" | "false") , "), " ;`
 Example:
 ```
 let value counter {
-  labels[return(String), mutable(true), …]
-  initially(0)
+  #return(String) #mutable(true) …
+  initially 0
 }
 
 counter becomes counter + 1
 
 let value greeting {
-  labels[return(String), mutable(false), …]
-  initially("Hello world!")
+  #return(String) #mutable(false) …
+  initially "Hello world!"
 }
 
 ```
@@ -175,7 +175,7 @@ it defined what other constructs can access this one.
 
 Grammar: `visibilityLabel = "visibility(" , { "private" | "public" | "folder" | "subfolders" | "package" | "contract" } , "), " ;`
 
-Example: ```labels[…, visibility(public), …]```
+Example: ```#visibility(public) …```
 
 #### scope
 Required for all declarations, used to determine the scope of the declaration.
@@ -189,7 +189,7 @@ Required for all declarations, used to determine the scope of the declaration.
 
 Grammar: `scopeLabel = "scope(" , { "instance" | "local" | "project" | "type" } , "), " ;`
 
-Example: ```labels[…, scope(local), …]```
+Example: ```#scope(local)```
 
 #### implementation
 Required for constructs with a `scope(instance)`. Used to determine at what degree the construct is implemented
@@ -203,14 +203,14 @@ Required for constructs with a `scope(instance)`. Used to determine at what degr
 
 Grammar: `implementationLabel = "implementation(" , { "full" | "partial" | "none" | "inherited" } , "), " ;`
 
-Example: ```labels[…, implementation(partial), …]```
+Example: ```#implementation(partial)```
 
 #### contract
 Required for constructs with a `scope(instance)`. Used to determine if a construct is required by contract, or it's a new construct
 
 Grammar: `contractLabel = "contract(" , typeIdentifier , "), " ;`
 
-Example: ```labels[…, contract(Listener), …]```
+Example: ```#contract(Listener)```
 
 ### Parameters
 Defined parameters for a function or a type constructor
@@ -225,39 +225,41 @@ parameter = valueDefinition | functionDefinition
 
 Grammar:
 ```
-"let function " , identifier , "{" ,
+"let 𝑓 " , identifier , "{" ,
   labels ,
   parameterList ,
-  "body {" , statement* , "}"
+  "body " , statement*
 "}" ;
 ```
 
 Examples:
 ```
-let function main {
-    labels[return(), generics[], mutable(false), visibility(public),
-        scope(project), implementation(full), ]
-    parameters{}
-    body { printLine("Hello world!"); }
+let 𝑓 main {
+    #return() #generics[] #mutable(false) #visibility(public)
+    #scope(project) #implementation(full);
+    
+    parameters
+    body 
+    printLine("Hello world!");
 }
 
-let function main {
-    labels[return(Integer), generics[], mutable(false), visibility(public),
-        scope(project), implementation(full), ]
-    parameters {
-        let value a {
-            labels[return(Integer), mutable(false), scope(local), implementation(full), ]
-        }
-        let value b {
-            labels[return(Integer), mutable(false), scope(local), implementation(full), ]
-        }
+let 𝑓 main {
+    #return(Integer) #generics[] #mutable(false) #visibility(public)
+    #scope(project) #implementation(full);
+    
+    parameters
+    let value a {
+        #return(Integer) #mutable(false) #scope(local) #implementation(full)
     }
-    body { 
-        return if {
-            a > b then a;
-            else then b;
-        };
+    let value b {
+        #return(Integer) #mutable(false) #scope(local) #implementation(full);
     }
+
+    body 
+    return if {
+        a > b then a;
+        else then b;
+    };
 }
 ```
 
@@ -267,19 +269,19 @@ Grammar:
 ```
 "let value " , identifier , "{" ,
   labels ,
-  ("initially(" , statement , ")")
+  ("initially" , statement)
 "}"
 ```
 
 Example:
 ```
 let value greeting {
-    labels[return(String), mutable(false), scope(local), implementation(full), ]
-    initially("Hello world!")
+    #return(String) #mutable(false) #scope(local) #implementation(full)
+    initially "Hello world!"
 }
 let value counter {
-    labels[return(Integer), mutable(true), scope(local), implementation(full), ]
-    initially(0)
+    #return(Integer) #mutable(true) #scope(local) #implementation(full)
+    initially 0
 }
 
 counter becomes counter + 1;
@@ -305,7 +307,7 @@ Branches can be nested:
 return if {
     a < b then if {
         b < c then b;
-        else then a;
+        else then { a };
     }
     else then b;
 };
@@ -317,6 +319,7 @@ Used for conditional side effects. No `else` needed:
 
 ```
 if x > 5 then printLine(x);
+if x > 90 then { printLine("Congratz!"); }
 ```
 
 ### While loops
@@ -330,40 +333,42 @@ while counter < 10 {
 
 ### Comparison operators
 
-`>`, `>=`, `<`, `<=`, `=`
+`>`, `≥`, `<`, `≤`, `=`, `≠`
 
 ### Arithmetic operators
 
-`+`, `-`, `*`, `/` with standard precedence. Parentheses for grouping: `(2 + 3) * 4`
+`+`, `-`, `×`, `/` with standard precedence. Parentheses for grouping: `(2 + 3) × 4`
 
 ### Boolean operators
 
-`and`, `or`, `not` — with short-circuit evaluation. 
-`not` precedes `and` and `or`.
-`and` and `or` have the same precedence.
+`∧`, `∨`, `¬` — with short-circuit evaluation. 
+`¬` precedes `∧` and `∨`.
+`∧` and `∨` have the same precedence.
 
 ```
-if x > 5 and x < 10 then printLine(x)
+if x > 5 ∧ x < 10 then printLine(x);
 ```
 
 ### Type
 #### Full implementation
 ```
 let type Cat {
-    labels[return(), generics[], mutable(false), visibility(public),
-      scope(project), implementation(full), ]
-    parameters {
-        let value name {
-            labels[return(String), mutable(false), scope(instance), implementation(full), ]
-        }
+    #return() #generics⟨⟩ #mutable(false) #visibility(public)
+    #scope(project) #implementation(full)
+    
+    parameters
+    let value name {
+        #return(String) #mutable(false) #scope(instance) #implementation(full)
     }
-    instance {
-        let function speak {
-            labels[return(), generics[], mutable(false), visibility(public),
-                scope(instance), implementation(full), contract()]
-            parameters {}
-            body { printLine("Meow"); }
-        }
+    
+    instance
+    let 𝑓 speak {
+        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #scope(instance) #implementation(full) #contract()
+        
+        parameters
+        body
+        printLine("Meow");
     }
 }
 ```
@@ -372,9 +377,9 @@ Instantiation and usage:
 
 ```
 let value cat {
-    labels[return(Cat), generics[], mutable(false), visibility(public),
-        scope(local), implementation(full),]
-    initially(Cat("Krokmou"))
+    #return(Cat) #generics⟨⟩ #mutable(false) #visibility(public)
+    #scope(local) #implementation(full)
+    initially Cat("Krokmou")
 }
 cat.speak()
 printLine(cat.name)
@@ -384,35 +389,36 @@ printLine(cat.name)
 
 ```
 let type Animal {
-    labels[return(), generics[], mutable(true), visibility(public),
-        scope(project), implementation(none),]
-    instance {
-        let value name {
-            labels[return(String), mutable(false), scope(instance), implementation(none), ]
-        }
-        let function speak {
-            labels[return(), generics[], mutable(false), visibility(public),
-                scope(instance), implementation(full)]
-            parameters {}
-        }
+    #return() #generics[] #mutable(true) #visibility(public)
+    #scope(project) implementation(none)
+    
+    instance
+    let value name {
+        #return(String) #mutable(false) #scope(instance) #implementation(none)
+    }
+    let 𝑓 speak {
+        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #scope(instance) #implementation(none)
+        parameters
     }
 }
 
 let type Cat {
-    labels[return(Animal), generics[], mutable(false), visibility(public),
-      scope(project), implementation(full), ]
-    parameters {
-        let value name {
-            labels[return(String), mutable(false), scope(instance), implementation(full), contract(Animal)]
-        }
+    #return(Animal) #generics⟨⟩ #mutable(false) #visibility(public)
+    #scope(project) #implementation(full)
+    
+    parameters
+    let value name {
+        #return(String) #mutable(false) #scope(instance) #implementation(full) #contract(Animal)
     }
-    instance {
-        let function speak {
-            labels[return(), generics[], mutable(false), visibility(public),
-                scope(instance), implementation(full), contract(Animal)]
-            parameters {}
-            body { printLine("Meow"); }
-        }
+
+    instance
+    let 𝑓 speak {
+        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #scope(instance) #implementation(full) #contract(Animal)
+        parameters
+        body
+        printLine("Meow");
     }
 }
 ```
@@ -421,9 +427,9 @@ Instantiation and usage:
 
 ```
 let value cat {
-    labels[return(Animal), generics[], mutable(false), visibility(public),
-        scope(local), implementation(full),]
-    initially(Cat("Krokmou"))
+    #return(Animal) #generics⟨⟩ #mutable(false) #visibility(public)
+    #scope(local) #implementation(full)
+    initially Cat("Krokmou")
 }
 cat.speak()
 printLine(cat.name)
@@ -433,16 +439,16 @@ printLine(cat.name)
 
 ```
 let singleton Red {
-    labels[return(), visibility(public), scope(project)]
-    instance { … }
+    #return() #visibility(public) #scope(project)
+    instance …
 }
 let singleton Green {
-    labels[return(), visibility(public), scope(project)]
-    instance { … }
+    #return() #visibility(public) #scope(project)
+    instance …
 }
 let singleton Blue {
-    labels[return(), visibility(public), scope(project)]
-    instance { … }
+    #return() #visibility(public) #scope(project)
+    instance …
 }
 ```
 
@@ -496,8 +502,8 @@ inherited(); !! Option 3, keyword already exists
 #### Getter/Setter
 ```
 let value highScore {
-  labels[...]
-  initially(0)
+  #…
+  initially 0
   onGet {
     printLine(value);
   }
@@ -525,13 +531,12 @@ Open questions:
 
 #### Extensions
 ```
-let function isValidEmail {
-  parameters {
-    let value subject {
-      labels[return(String), …, scope(project), …, ]
-    }
+let 𝑓 isValidEmail {
+  parameters
+  let value subject {
+    #return(String) … #scope(project) …
   }
-  body { … }
+  body …
 }
 
 "someString".isValidEmail()
@@ -543,16 +548,16 @@ Open questions:
 #### Anonymous Instantiation
 ```
 listeners.add(
-    let function {
-        labels[…]
-        body { … }
+    let 𝑓 {
+        #…
+        body …
     }
 )
 
 list.add(
     let type {
-        labels[return(Animal), …]
-        instance { … }
+        #return(Animal) #…
+        instance …
     }()
 )
 ```
@@ -560,9 +565,9 @@ list.add(
 #### Enumerations
 ```
 let enumeration Event {
-    labels[…]
-    parameters {} !! Constructor parameters
-    instance { … } !! Contracts and partial implementations
+    #…
+    parameters !! Constructor parameters
+    instance … !! Contracts and partial implementations
     list[
         let singleton BackRequested { … }
         let type SaveClicked { … }
@@ -575,15 +580,15 @@ Let the compiler know that this value/function that returns a Boolean
 must have a negated equivalent with the given name.
 ```
 let value isXmas {
-    labels[return(Boolean), …, negated("isNotXmas"), …]
-    initially(false)
+    #return(Boolean) … #negated("isNotXmas") …
+    initially false
 }
 
 printLine(isNotXmas)
 
-let function isValid {
-    labels[return(Boolean), …, negated("isInvalid"), …]
-    body { … }
+let 𝑓 isValid {
+    #return(Boolean) … #negated("isInvalid") …
+    body …
 }
 
 printLine(isInvalid())
@@ -605,11 +610,11 @@ printLine(isInvalid())
 - Variable wrapper for Rx
 ```
 let value whatever {
-    labels[return(Mutable<String>), mutable(false), …]
-    initially(Mutable(""))
+    #return(Mutable<String>) #mutable(false) …
+    initially Mutable("")
 }
 
-value.onChange(…)
+whatever.onChange(…)
 ```
 - Rx / Flow
 - Dependency Injection library built-in
