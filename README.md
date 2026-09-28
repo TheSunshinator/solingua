@@ -381,8 +381,8 @@ let value cat {
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
 }
-cat.speak()
-printLine(cat.name)
+cat → speak()
+printLine(cat → name)
 ```
 
 #### No implementations
@@ -431,8 +431,8 @@ let value cat {
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
 }
-cat.speak()
-printLine(cat.name)
+cat → speak()
+printLine(cat → name)
 ```
 
 ### Singletons
@@ -523,8 +523,8 @@ Open questions:
 Functions are essentially lambdas, or should be. When passing them as last parameter,
 add a `trailing(true|false)` to force the usage as trailing, if not identifier
 ```
-list.map() { it.toString() }
-list.map(toString)
+list → map() { it → toString() }
+list → map(toString)
 ```
 Open questions:
 - This won't work in .sol files, but might work with the IDE as syntax sugar
@@ -539,7 +539,7 @@ let 𝑓 isValidEmail {
   body …
 }
 
-"someString".isValidEmail()
+"someString" → isValidEmail()
 ```
 
 Open questions:
@@ -547,14 +547,14 @@ Open questions:
 
 #### Anonymous Instantiation
 ```
-listeners.add(
+listeners → add(
     let 𝑓 {
         #…
         body …
     }
 )
 
-list.add(
+list → add(
     let type {
         #return(Animal) #…
         instance …
@@ -597,11 +597,11 @@ printLine(isInvalid())
 #### Standard Library
 ##### Iteration
 - Sequences
-- `iterable.forEach() { … }`
-- `iterable.fold(initialValue) { … }`
-- `iterable.map() { … }`
-- `iterable.find() { … }`
-- `iterable.filter() { … }`
+- `iterable → forEach() { … }`
+- `iterable → fold(initialValue) { … }`
+- `iterable → map() { … }`
+- `iterable → find() { … }`
+- `iterable → filter() { … }`
 
 ##### Utilities
 - Option type
@@ -614,7 +614,7 @@ let value whatever {
     initially Mutable("")
 }
 
-whatever.onChange(…)
+whatever → onChange(…)
 ```
 - Rx / Flow
 - Dependency Injection library built-in
@@ -647,7 +647,7 @@ A type would look like the following:
 #public
 Cat: Animal, SomeOtherType is { [name: String]
     #contracted
-    this.name is name
+    this → name is name
   
     #contracted
     speak is { printLine("Meow") }

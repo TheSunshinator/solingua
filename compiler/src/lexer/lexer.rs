@@ -41,7 +41,7 @@ impl Lexer {
             r#""(?:[^"\\]|\\.)*""#,   // strings (with escaped chars)
             r"|[a-zA-Z_][a-zA-Z0-9_]*", // words (identifiers/keywords)
             r"|\d+",                     // integers
-            r"|[><=≥≤≠(){}\[\],+\-×/;.#|&𝑓⟨⟩∧∨¬]",  // single-char symbols and operators
+            r"|[><=≥≤≠(){}\[\],+\-×/;#|&𝑓⟨⟩∧∨¬→]",  // single-char symbols and operators
         )).unwrap();
 
         let mut tokens = Vec::new();

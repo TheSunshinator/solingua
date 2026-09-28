@@ -1,6 +1,6 @@
 let 𝑓 main {
     #return() #generic⟨⟩ #mutable(false) #visibility(public)
-    #scope(project) #implementation(full)
+    #scope(project) #implementation(full);
 
     parameters
 

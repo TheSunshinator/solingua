@@ -61,14 +61,14 @@ let 𝑓 main {
         #return(Cat) #mutable(false) #scope(local) #implementation(full);
         initially Cat("Krokmou")
     }
-    cat.speak();
-    printLine(cat.name);
+    cat → speak();
+    printLine(cat → name);
 
     let value p {
         #return(Point) #mutable(false) #scope(local) #implementation(full);
         initially Point(10, 20)
     }
-    p.moveBy(5, -3);
-    printLine(p.x);
-    printLine(p.y);
+    p → moveBy(5, -3);
+    printLine(p → x);
+    printLine(p → y);
 }

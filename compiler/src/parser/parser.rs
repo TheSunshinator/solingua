@@ -48,7 +48,7 @@ fn infix_binding_power(token: &Token) -> Option<(u8, u8)> {
         Token::Symbol(Symbol::Arithmetic(Arithmetic::Divided)) => Some((7, 8)),
 
         // Postfix dot — member access / method call
-        Token::Symbol(Symbol::Dot) => Some((11, 12)),
+        Token::Symbol(Symbol::Arrow) => Some((11, 12)),
 
         _ => None,
     }
@@ -449,7 +449,7 @@ impl Parser {
             }
 
             // Postfix dot: member access / method call
-            if current == Token::Symbol(Symbol::Dot) {
+            if current == Token::Symbol(Symbol::Arrow) {
                 self.advance();
                 let member = self.expect_identifier();
 
@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn test_member_access() {
-        assert_eq!(parse_expr("foo.bar"), Expression::MemberAccess {
+        assert_eq!(parse_expr("foo → bar"), Expression::MemberAccess {
             object: Box::new(Expression::ValueReference("foo".to_string())),
             member: "bar".to_string(),
         });
@@ -930,7 +930,7 @@ mod tests {
 
     #[test]
     fn test_method_call() {
-        assert_eq!(parse_expr("foo.bar(1)"), Expression::MethodCall {
+        assert_eq!(parse_expr("foo → bar(1)"), Expression::MethodCall {
             object: Box::new(Expression::ValueReference("foo".to_string())),
             method: "bar".to_string(),
             arguments: vec![Expression::IntegerLiteral(1)],
@@ -939,8 +939,8 @@ mod tests {
 
     #[test]
     fn test_chained_member_access() {
-        // a.b.c → MemberAccess(MemberAccess(a, b), c)
-        assert_eq!(parse_expr("a.b.c"), Expression::MemberAccess {
+        // a → b → c → MemberAccess(MemberAccess(a, b), c)
+        assert_eq!(parse_expr("a → b → c"), Expression::MemberAccess {
             object: Box::new(Expression::MemberAccess {
                 object: Box::new(Expression::ValueReference("a".to_string())),
                 member: "b".to_string(),
@@ -951,9 +951,9 @@ mod tests {
 
     #[test]
     fn test_method_on_arithmetic_result() {
-        // Not a real use case, but tests that dot binds tighter than +
-        // a.size + 1 → Add(MemberAccess(a, size), 1)
-        assert_eq!(parse_expr("a.size + 1"), Expression::Arithmetic {
+        // Tests that → binds tighter than +
+        // a → size + 1 → Add(MemberAccess(a, size), 1)
+        assert_eq!(parse_expr("a → size + 1"), Expression::Arithmetic {
             left: Box::new(Expression::MemberAccess {
                 object: Box::new(Expression::ValueReference("a".to_string())),
                 member: "size".to_string(),
