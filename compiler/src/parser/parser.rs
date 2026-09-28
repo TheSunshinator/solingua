@@ -5,8 +5,8 @@ use crate::ast::{
 };
 use crate::lexer::{Span, SpannedToken, Token};
 use crate::lexer::keyword::Keyword;
-use crate::lexer::symbol::{Symbol, Bound, Arithmetic};
-use crate::lexer::comparison::{ComparisonOperator as LexerComparison, ComparisonOrientation};
+use crate::lexer::symbol::{Symbol, Bound, Arithmetic, Logical};
+use crate::lexer::comparison::ComparisonOperator as LexerComparison;
 use crate::lexer::literal::{Literal, StringLiteral, StringPart};
 use crate::util::Trivalent;
 
@@ -14,6 +14,52 @@ pub struct Parser {
     tokens: Vec<SpannedToken>,
     position: usize,
     verbose: bool,
+}
+
+// === Binding powers for Pratt parsing ===
+//
+// Each infix operator returns (left_bp, right_bp).
+// Left-associative:  right_bp = left_bp + 1
+// Right-associative: right_bp = left_bp
+// Non-associative:   right_bp = left_bp + 1 (and we don't loop)
+//
+// Precedence (low to high):
+//   1/2  — ∧, ∨         (logical, left-assoc, same precedence per spec)
+//   3/4  — comparisons   (non-associative)
+//   5/6  — +, -          (additive, left-assoc)
+//   7/8  — ×, /          (multiplicative, left-assoc)
+//   11   — . (postfix)   (member access / method call)
+
+fn infix_binding_power(token: &Token) -> Option<(u8, u8)> {
+    match token {
+        // Logical ∧ / ∨ — same precedence, left-associative
+        Token::Symbol(Symbol::Logical(Logical::And)) |
+        Token::Symbol(Symbol::Logical(Logical::Or)) => Some((1, 2)),
+
+        // Comparisons — non-associative (left_bp = 3, right_bp = 4)
+        Token::ComparisonOperator(_) => Some((3, 4)),
+
+        // Additive — left-associative
+        Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus)) |
+        Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus)) => Some((5, 6)),
+
+        // Multiplicative — left-associative
+        Token::Symbol(Symbol::Arithmetic(Arithmetic::Times)) |
+        Token::Symbol(Symbol::Arithmetic(Arithmetic::Divided)) => Some((7, 8)),
+
+        // Postfix dot — member access / method call
+        Token::Symbol(Symbol::Dot) => Some((11, 12)),
+
+        _ => None,
+    }
+}
+
+fn prefix_binding_power(token: &Token) -> Option<u8> {
+    match token {
+        // ¬ (logical not) — tighter than ∧/∨ but looser than comparison
+        Token::Symbol(Symbol::Logical(Logical::Not)) => Some(9),
+        _ => None,
+    }
 }
 
 impl Parser {
@@ -38,7 +84,7 @@ impl Parser {
         let construct = self.advance().clone();
 
         match construct {
-            Token::Keyword(Keyword::Function) => {
+            Token::Symbol(Symbol::Function) => {
                 let decl = self.parse_function_declaration();
                 Declaration::Function(decl)
             }
@@ -63,25 +109,52 @@ impl Parser {
             }
         }
 
+        // parameters section (bare keyword, no braces)
         let mut parameters = Vec::new();
         if self.check(&Token::Keyword(Keyword::Parameters)) {
             self.advance();
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
-            parameters = self.parse_parameter_list();
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+            // Parse parameter declarations until we hit 'body' or closing brace
+            while self.check(&Token::Keyword(Keyword::Let)) {
+                parameters.push(self.parse_parameter());
+            }
         }
 
+        // body section (bare keyword, no braces)
         let mut body = Vec::new();
         if self.check(&Token::Keyword(Keyword::Body)) {
             self.advance();
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
-            body = self.parse_statement_list();
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+            // Parse statements until the closing brace of the function
+            while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+                body.push(self.parse_statement());
+                if self.check(&Token::Symbol(Symbol::Semicolon)) {
+                    self.advance();
+                }
+            }
         }
 
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
 
         FunctionDeclaration { name, parameters, return_type, body }
+    }
+
+    fn parse_parameter(&mut self) -> Parameter {
+        self.expect_token(&Token::Keyword(Keyword::Let));
+        self.expect_token(&Token::Keyword(Keyword::Value));
+        let name = self.expect_identifier();
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+
+        let labels = self.parse_label_declaration();
+
+        let mut type_name = "Unknown".to_string();
+        for ld in &labels {
+            if let super::label::Label::Return(Trivalent::Some(t)) = &ld.label {
+                type_name = t.clone();
+            }
+        }
+
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+
+        Parameter { name, type_name }
     }
 
     fn parse_parameter_list(&mut self) -> Vec<Parameter> {
@@ -114,7 +187,6 @@ impl Parser {
         let mut statements = Vec::new();
         while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
             statements.push(self.parse_statement());
-            // Optional semicolons between statements
             if self.check(&Token::Symbol(Symbol::Semicolon)) {
                 self.advance();
             }
@@ -215,10 +287,9 @@ impl Parser {
 
         while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
             match self.current().clone() {
-                Token::Keyword(Keyword::Labels) => {
-                    self.advance();
-                    self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Opening)));
-                    while !self.check(&Token::Symbol(Symbol::Bracket(Bound::Closing))) {
+                Token::Symbol(Symbol::Label) => {
+                    while self.check(&Token::Symbol(Symbol::Label)) {
+                        self.advance();
                         match self.current().clone() {
                             Token::Keyword(Keyword::Type) => {
                                 self.advance();
@@ -226,11 +297,9 @@ impl Parser {
                                 type_name = self.expect_identifier();
                                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                             }
-                            Token::Symbol(Symbol::Comma) => { self.advance(); }
-                            _ => { self.advance(); } // skip other labels for now
+                            _ => { self.advance(); }
                         }
                     }
-                    self.expect_token(&Token::Symbol(Symbol::Bracket(Bound::Closing)));
                 }
                 Token::Identifier(ref s) if s == "means" => {
                     self.advance();
@@ -253,151 +322,127 @@ impl Parser {
         }
     }
 
-    // === Expressions ===
+    // === Expressions (Pratt parser) ===
 
     pub(crate) fn parse_expression(&mut self) -> Expression {
-        let mut left = self.parse_not_expression();
+        self.parse_expression_bp(0)
+    }
 
-        loop {
-            let operator = if self.check(&Token::Keyword(Keyword::And)) {
-                Some(LogicalOperator::And)
-            } else if self.check(&Token::Keyword(Keyword::Or)) {
-                Some(LogicalOperator::Or)
-            } else {
-                None
-            };
-
-            if let Some(operator) = operator {
-                self.advance();
-                let right = self.parse_not_expression();
-                left = Expression::LogicalBinary {
-                    left: Box::new(left),
-                    operator,
-                    right: Box::new(right),
-                };
-            } else {
-                break;
+    fn parse_expression_bp(&mut self, min_bp: u8) -> Expression {
+        // --- Prefix / atom ---
+        let mut lhs = if let Some(prefix_bp) = prefix_binding_power(self.current()) {
+            let op_token = self.advance().clone();
+            let rhs = self.parse_expression_bp(prefix_bp);
+            match op_token {
+                Token::Symbol(Symbol::Logical(Logical::Not)) => {
+                    Expression::LogicalNot(Box::new(rhs))
+                }
+                _ => unreachable!(),
             }
-        }
-
-        left
-    }
-
-    fn parse_not_expression(&mut self) -> Expression {
-        if self.check(&Token::Keyword(Keyword::Not)) {
-            self.advance();
-            let operand = self.parse_not_expression();
-            return Expression::LogicalNot(Box::new(operand));
-        }
-        self.parse_comparison_expression()
-    }
-
-    fn parse_comparison_expression(&mut self) -> Expression {
-        let left = self.parse_additive_expression();
-
-        let operator = match self.current() {
-            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::GreaterThan) }) => Some(ComparisonOperator::GreaterThan),
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::GreaterThan) }) => Some(ComparisonOperator::GreaterThanOrEqual),
-            Token::ComparisonOperator(LexerComparison { checks_equality: false, orientation: Some(ComparisonOrientation::LessThan) }) => Some(ComparisonOperator::LessThan),
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: Some(ComparisonOrientation::LessThan) }) => Some(ComparisonOperator::LessThanOrEqual),
-            Token::ComparisonOperator(LexerComparison { checks_equality: true, orientation: None }) => Some(ComparisonOperator::Equal),
-            _ => None,
+        } else {
+            self.parse_primary_expression()
         };
 
-        if let Some(operator) = operator {
-            self.advance();
-            let right = self.parse_additive_expression();
-            return Expression::Comparison {
-                left: Box::new(left),
-                operator,
-                right: Box::new(right),
-            };
-        }
-
-        left
-    }
-
-    fn parse_additive_expression(&mut self) -> Expression {
-        let mut left = self.parse_multiplicative_expression();
-
+        // --- Infix / postfix loop ---
         loop {
-            let operator = if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus))) {
-                Some(ArithmeticOperator::Add)
-            } else if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus))) {
-                Some(ArithmeticOperator::Subtract)
-            } else {
-                None
+            let current = self.current().clone();
+
+            let Some((left_bp, right_bp)) = infix_binding_power(&current) else {
+                break;
             };
 
-            if let Some(operator) = operator {
-                self.advance();
-                let right = self.parse_multiplicative_expression();
-                left = Expression::Arithmetic {
-                    left: Box::new(left),
-                    operator,
-                    right: Box::new(right),
-                };
-            } else {
+            if left_bp < min_bp {
                 break;
             }
-        }
 
-        left
-    }
-
-    fn parse_multiplicative_expression(&mut self) -> Expression {
-        let mut left = self.parse_postfix_expression();
-
-        loop {
-            let operator = if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Times))) {
-                Some(ArithmeticOperator::Multiply)
-            } else if self.check(&Token::Symbol(Symbol::Arithmetic(Arithmetic::Divided))) {
-                Some(ArithmeticOperator::Divide)
-            } else {
-                None
-            };
-
-            if let Some(operator) = operator {
+            // Postfix dot: member access / method call
+            if current == Token::Symbol(Symbol::Dot) {
                 self.advance();
-                let right = self.parse_postfix_expression();
-                left = Expression::Arithmetic {
-                    left: Box::new(left),
-                    operator,
-                    right: Box::new(right),
-                };
-            } else {
-                break;
+                let member = self.expect_identifier();
+
+                if self.check(&Token::Symbol(Symbol::Parentheses(Bound::Opening))) {
+                    self.advance();
+                    let arguments = self.parse_arguments();
+                    self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
+                    lhs = Expression::MethodCall {
+                        object: Box::new(lhs),
+                        method: member,
+                        arguments,
+                    };
+                } else {
+                    lhs = Expression::MemberAccess {
+                        object: Box::new(lhs),
+                        member,
+                    };
+                }
+                continue;
             }
-        }
 
-        left
-    }
-
-    fn parse_postfix_expression(&mut self) -> Expression {
-        let mut expression = self.parse_primary_expression();
-
-        while self.check(&Token::Symbol(Symbol::Dot)) {
+            // Consume the operator
             self.advance();
-            let member = self.expect_identifier();
+            let rhs = self.parse_expression_bp(right_bp);
 
-            if self.check(&Token::Symbol(Symbol::Parentheses(Bound::Opening))) {
-                self.advance();
-                let arguments = self.parse_arguments();
-                self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
-                expression = Expression::MethodCall {
-                    object: Box::new(expression),
-                    method: member,
-                    arguments,
-                };
-            } else {
-                expression = Expression::MemberAccess {
-                    object: Box::new(expression),
-                    member,
-                };
-            }
+            lhs = match &current {
+                // Logical
+                Token::Symbol(Symbol::Logical(Logical::And)) => Expression::LogicalBinary {
+                    left: Box::new(lhs),
+                    operator: LogicalOperator::And,
+                    right: Box::new(rhs),
+                },
+                Token::Symbol(Symbol::Logical(Logical::Or)) => Expression::LogicalBinary {
+                    left: Box::new(lhs),
+                    operator: LogicalOperator::Or,
+                    right: Box::new(rhs),
+                },
+
+                // Comparison
+                Token::ComparisonOperator(op) => {
+                    let operator = match op {
+                        LexerComparison { checks_equality: true, negated: true, checks_smaller_than: true } => ComparisonOperator::GreaterThan,
+                        LexerComparison { checks_equality: false, negated: true, checks_smaller_than: true } => ComparisonOperator::GreaterThanOrEqual,
+                        LexerComparison { checks_equality: false, negated: false, checks_smaller_than: true } => ComparisonOperator::LessThan,
+                        LexerComparison { checks_equality: true, negated: false, checks_smaller_than: true } => ComparisonOperator::LessThanOrEqual,
+                        LexerComparison { checks_equality: true, negated: false, checks_smaller_than: false } => ComparisonOperator::Equal,
+                        LexerComparison { checks_equality: true, negated: true, checks_smaller_than: false } => ComparisonOperator::NotEqual,
+                        _ => {
+                            let span = self.current_span();
+                            panic!("{}:{}: Unknown comparison operator", span.line, span.column);
+                        }
+                    };
+                    Expression::Comparison {
+                        left: Box::new(lhs),
+                        operator,
+                        right: Box::new(rhs),
+                    }
+                }
+
+                // Arithmetic
+                Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus)) => Expression::Arithmetic {
+                    left: Box::new(lhs),
+                    operator: ArithmeticOperator::Add,
+                    right: Box::new(rhs),
+                },
+                Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus)) => Expression::Arithmetic {
+                    left: Box::new(lhs),
+                    operator: ArithmeticOperator::Subtract,
+                    right: Box::new(rhs),
+                },
+                Token::Symbol(Symbol::Arithmetic(Arithmetic::Times)) => Expression::Arithmetic {
+                    left: Box::new(lhs),
+                    operator: ArithmeticOperator::Multiply,
+                    right: Box::new(rhs),
+                },
+                Token::Symbol(Symbol::Arithmetic(Arithmetic::Divided)) => Expression::Arithmetic {
+                    left: Box::new(lhs),
+                    operator: ArithmeticOperator::Divide,
+                    right: Box::new(rhs),
+                },
+
+                _ => unreachable!(),
+            };
         }
 
-        expression
+        lhs
     }
 
     fn parse_primary_expression(&mut self) -> Expression {
@@ -446,7 +491,7 @@ impl Parser {
             }
             Token::Symbol(Symbol::Parentheses(Bound::Opening)) => {
                 self.advance();
-                let expression = self.parse_expression();
+                let expression = self.parse_expression_bp(0);
                 self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
                 expression
             }
@@ -567,7 +612,6 @@ impl Parser {
                 self.advance();
                 name
             }
-            // Allow keywords used as identifiers in name positions
             Token::Keyword(Keyword::Value) => { self.advance(); "value".to_string() }
             Token::Keyword(Keyword::Type) => { self.advance(); "type".to_string() }
             Token::Keyword(Keyword::None) => { self.advance(); "nothing".to_string() }
@@ -580,5 +624,249 @@ impl Parser {
 
     pub(crate) fn is_at_end(&self) -> bool {
         matches!(self.current(), Token::EndOfFile)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_expr(input: &str) -> Expression {
+        let tokens = crate::lexer::Lexer::new(input).tokenize();
+        let mut parser = Parser::new(tokens, false);
+        parser.parse_expression()
+    }
+
+    // --- Atoms ---
+
+    #[test]
+    fn test_integer_literal() {
+        assert_eq!(parse_expr("42"), Expression::IntegerLiteral(42));
+    }
+
+    #[test]
+    fn test_boolean_literal() {
+        assert_eq!(parse_expr("true"), Expression::BooleanLiteral(true));
+    }
+
+    #[test]
+    fn test_string_literal() {
+        assert_eq!(parse_expr(r#""hello""#), Expression::StringLiteral("hello".to_string()));
+    }
+
+    #[test]
+    fn test_value_reference() {
+        assert_eq!(parse_expr("x"), Expression::ValueReference("x".to_string()));
+    }
+
+    #[test]
+    fn test_function_call() {
+        assert_eq!(parse_expr("foo(1, 2)"), Expression::FunctionCall {
+            name: "foo".to_string(),
+            arguments: vec![
+                Expression::IntegerLiteral(1),
+                Expression::IntegerLiteral(2),
+            ],
+        });
+    }
+
+    // --- Arithmetic precedence ---
+
+    #[test]
+    fn test_addition() {
+        // 1 + 2 → Add(1, 2)
+        assert_eq!(parse_expr("1 + 2"), Expression::Arithmetic {
+            left: Box::new(Expression::IntegerLiteral(1)),
+            operator: ArithmeticOperator::Add,
+            right: Box::new(Expression::IntegerLiteral(2)),
+        });
+    }
+
+    #[test]
+    fn test_multiplication_before_addition() {
+        // 1 + 2 × 3 → Add(1, Mul(2, 3))
+        assert_eq!(parse_expr("1 + 2 × 3"), Expression::Arithmetic {
+            left: Box::new(Expression::IntegerLiteral(1)),
+            operator: ArithmeticOperator::Add,
+            right: Box::new(Expression::Arithmetic {
+                left: Box::new(Expression::IntegerLiteral(2)),
+                operator: ArithmeticOperator::Multiply,
+                right: Box::new(Expression::IntegerLiteral(3)),
+            }),
+        });
+    }
+
+    #[test]
+    fn test_left_associative_addition() {
+        // 1 + 2 + 3 → Add(Add(1, 2), 3)
+        assert_eq!(parse_expr("1 + 2 + 3"), Expression::Arithmetic {
+            left: Box::new(Expression::Arithmetic {
+                left: Box::new(Expression::IntegerLiteral(1)),
+                operator: ArithmeticOperator::Add,
+                right: Box::new(Expression::IntegerLiteral(2)),
+            }),
+            operator: ArithmeticOperator::Add,
+            right: Box::new(Expression::IntegerLiteral(3)),
+        });
+    }
+
+    #[test]
+    fn test_parenthesized_expression() {
+        // (1 + 2) × 3 → Mul(Add(1, 2), 3)
+        assert_eq!(parse_expr("(1 + 2) × 3"), Expression::Arithmetic {
+            left: Box::new(Expression::Arithmetic {
+                left: Box::new(Expression::IntegerLiteral(1)),
+                operator: ArithmeticOperator::Add,
+                right: Box::new(Expression::IntegerLiteral(2)),
+            }),
+            operator: ArithmeticOperator::Multiply,
+            right: Box::new(Expression::IntegerLiteral(3)),
+        });
+    }
+
+    // --- Comparison ---
+
+    #[test]
+    fn test_comparison() {
+        // a > b → Comparison(a, GreaterThan, b)
+        assert_eq!(parse_expr("a > b"), Expression::Comparison {
+            left: Box::new(Expression::ValueReference("a".to_string())),
+            operator: ComparisonOperator::GreaterThan,
+            right: Box::new(Expression::ValueReference("b".to_string())),
+        });
+    }
+
+    #[test]
+    fn test_comparison_with_arithmetic() {
+        // a + 1 > b × 2 → Comparison(Add(a, 1), GreaterThan, Mul(b, 2))
+        assert_eq!(parse_expr("a + 1 > b × 2"), Expression::Comparison {
+            left: Box::new(Expression::Arithmetic {
+                left: Box::new(Expression::ValueReference("a".to_string())),
+                operator: ArithmeticOperator::Add,
+                right: Box::new(Expression::IntegerLiteral(1)),
+            }),
+            operator: ComparisonOperator::GreaterThan,
+            right: Box::new(Expression::Arithmetic {
+                left: Box::new(Expression::ValueReference("b".to_string())),
+                operator: ArithmeticOperator::Multiply,
+                right: Box::new(Expression::IntegerLiteral(2)),
+            }),
+        });
+    }
+
+    #[test]
+    fn test_not_equal() {
+        assert_eq!(parse_expr("a ≠ b"), Expression::Comparison {
+            left: Box::new(Expression::ValueReference("a".to_string())),
+            operator: ComparisonOperator::NotEqual,
+            right: Box::new(Expression::ValueReference("b".to_string())),
+        });
+    }
+
+    // --- Logical operators ---
+
+    #[test]
+    fn test_logical_and() {
+        assert_eq!(parse_expr("a ∧ b"), Expression::LogicalBinary {
+            left: Box::new(Expression::ValueReference("a".to_string())),
+            operator: LogicalOperator::And,
+            right: Box::new(Expression::ValueReference("b".to_string())),
+        });
+    }
+
+    #[test]
+    fn test_logical_not() {
+        assert_eq!(parse_expr("¬a"), Expression::LogicalNot(
+            Box::new(Expression::ValueReference("a".to_string())),
+        ));
+    }
+
+    #[test]
+    fn test_logical_not_binds_tighter_than_and() {
+        // ¬a ∧ b → And(Not(a), b)
+        assert_eq!(parse_expr("¬a ∧ b"), Expression::LogicalBinary {
+            left: Box::new(Expression::LogicalNot(
+                Box::new(Expression::ValueReference("a".to_string())),
+            )),
+            operator: LogicalOperator::And,
+            right: Box::new(Expression::ValueReference("b".to_string())),
+        });
+    }
+
+    #[test]
+    fn test_comparison_binds_tighter_than_logical() {
+        // x > 5 ∧ x < 10 → And(Cmp(x, >, 5), Cmp(x, <, 10))
+        assert_eq!(parse_expr("x > 5 ∧ x < 10"), Expression::LogicalBinary {
+            left: Box::new(Expression::Comparison {
+                left: Box::new(Expression::ValueReference("x".to_string())),
+                operator: ComparisonOperator::GreaterThan,
+                right: Box::new(Expression::IntegerLiteral(5)),
+            }),
+            operator: LogicalOperator::And,
+            right: Box::new(Expression::Comparison {
+                left: Box::new(Expression::ValueReference("x".to_string())),
+                operator: ComparisonOperator::LessThan,
+                right: Box::new(Expression::IntegerLiteral(10)),
+            }),
+        });
+    }
+
+    #[test]
+    fn test_and_or_same_precedence_left_assoc() {
+        // a ∧ b ∨ c → Or(And(a, b), c)
+        assert_eq!(parse_expr("a ∧ b ∨ c"), Expression::LogicalBinary {
+            left: Box::new(Expression::LogicalBinary {
+                left: Box::new(Expression::ValueReference("a".to_string())),
+                operator: LogicalOperator::And,
+                right: Box::new(Expression::ValueReference("b".to_string())),
+            }),
+            operator: LogicalOperator::Or,
+            right: Box::new(Expression::ValueReference("c".to_string())),
+        });
+    }
+
+    // --- Member access / method call ---
+
+    #[test]
+    fn test_member_access() {
+        assert_eq!(parse_expr("foo.bar"), Expression::MemberAccess {
+            object: Box::new(Expression::ValueReference("foo".to_string())),
+            member: "bar".to_string(),
+        });
+    }
+
+    #[test]
+    fn test_method_call() {
+        assert_eq!(parse_expr("foo.bar(1)"), Expression::MethodCall {
+            object: Box::new(Expression::ValueReference("foo".to_string())),
+            method: "bar".to_string(),
+            arguments: vec![Expression::IntegerLiteral(1)],
+        });
+    }
+
+    #[test]
+    fn test_chained_member_access() {
+        // a.b.c → MemberAccess(MemberAccess(a, b), c)
+        assert_eq!(parse_expr("a.b.c"), Expression::MemberAccess {
+            object: Box::new(Expression::MemberAccess {
+                object: Box::new(Expression::ValueReference("a".to_string())),
+                member: "b".to_string(),
+            }),
+            member: "c".to_string(),
+        });
+    }
+
+    #[test]
+    fn test_method_on_arithmetic_result() {
+        // Not a real use case, but tests that dot binds tighter than +
+        // a.size + 1 → Add(MemberAccess(a, size), 1)
+        assert_eq!(parse_expr("a.size + 1"), Expression::Arithmetic {
+            left: Box::new(Expression::MemberAccess {
+                object: Box::new(Expression::ValueReference("a".to_string())),
+                member: "size".to_string(),
+            }),
+            operator: ArithmeticOperator::Add,
+            right: Box::new(Expression::IntegerLiteral(1)),
+        });
     }
 }
