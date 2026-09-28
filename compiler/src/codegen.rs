@@ -26,6 +26,8 @@ pub struct CodeGenerator {
     singletons: HashMap<String, i64>,
     /// Next singleton tag
     next_singleton_tag: i64,
+    /// When emitting a method, tracks the owning type name
+    current_blueprint_name: Option<String>,
 }
 
 impl CodeGenerator {
@@ -41,6 +43,7 @@ impl CodeGenerator {
             blueprints: HashMap::new(),
             singletons: HashMap::new(),
             next_singleton_tag: 1,
+            current_blueprint_name: None,
         }
     }
 
@@ -370,6 +373,7 @@ impl CodeGenerator {
         self.local_variables.clear();
         self.variable_types.clear();
         self.next_stack_offset = 16;
+        self.current_blueprint_name = Some(blueprint_name.to_string());
 
         // Count locals: self + explicit params + value declarations
         let explicit_param_count = method.parameters.len();
@@ -426,6 +430,7 @@ impl CodeGenerator {
         // Reset local variable state for each function
         self.local_variables.clear();
         self.variable_types.clear();
+        self.current_blueprint_name = None;
         // Reserve [sp, #0..#15] (16 bytes) for outgoing variadic/call arguments.
         // Local variables start at offset 16.
         self.next_stack_offset = 16;
@@ -557,12 +562,28 @@ impl CodeGenerator {
         self.emit(&format!("    str x0, [sp, #{offset}]"));
     }
 
+    /// Resolve a field name to its byte offset within the current blueprint's instance.
+    /// Returns None if we're not in a method or the field doesn't exist.
+    fn resolve_instance_field(&self, name: &str) -> Option<usize> {
+        let bp_name = self.current_blueprint_name.as_ref()?;
+        let fields = self.blueprints.get(bp_name)?;
+        let index = fields.iter().position(|(field_name, _)| field_name == name)?;
+        Some(index * 8)
+    }
+
     fn emit_mutation(&mut self, name: &str, new_value: &Expression) {
-        let offset = *self.local_variables.get(name).unwrap_or_else(|| {
+        if let Some(offset) = self.local_variables.get(name).copied() {
+            self.emit_expression_into_x0(new_value);
+            self.emit(&format!("    str x0, [sp, #{offset}]"));
+        } else if let Some(field_offset) = self.resolve_instance_field(name) {
+            // Mutate instance field through self pointer
+            self.emit_expression_into_x0(new_value);
+            let self_offset = *self.local_variables.get("self").unwrap();
+            self.emit(&format!("    ldr x9, [sp, #{self_offset}]"));
+            self.emit(&format!("    str x0, [x9, #{field_offset}]"));
+        } else {
             panic!("Cannot mutate undefined variable: {}", name);
-        });
-        self.emit_expression_into_x0(new_value);
-        self.emit(&format!("    str x0, [sp, #{offset}]"));
+        }
     }
 
     fn emit_return_statement(&mut self, expression: &Expression) {
@@ -591,11 +612,15 @@ impl CodeGenerator {
             Expression::ValueReference(name) => {
                 if let Some(tag) = self.singletons.get(name).copied() {
                     self.emit(&format!("    mov x0, #{tag}"));
-                } else {
-                    let offset = *self.local_variables.get(name).unwrap_or_else(|| {
-                        panic!("Undefined variable: {}", name);
-                    });
+                } else if let Some(offset) = self.local_variables.get(name).copied() {
                     self.emit(&format!("    ldr x0, [sp, #{offset}]"));
+                } else if let Some(field_offset) = self.resolve_instance_field(name) {
+                    // Load self pointer, then load field
+                    let self_offset = *self.local_variables.get("self").unwrap();
+                    self.emit(&format!("    ldr x9, [sp, #{self_offset}]"));
+                    self.emit(&format!("    ldr x0, [x9, #{field_offset}]"));
+                } else {
+                    panic!("Undefined variable: {}", name);
                 }
             }
             Expression::FunctionCall { name, arguments } => {
@@ -685,6 +710,9 @@ impl CodeGenerator {
         }
 
         let temp_base = self.next_stack_offset;
+        // Reserve temp slots for instance pointer + all arguments
+        let slots_needed = 1 + arguments.len();
+        self.next_stack_offset += slots_needed * 8;
 
         // Evaluate the instance pointer (will be x0 / first arg to method)
         self.emit_expression_into_x0(object);

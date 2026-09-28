@@ -62,7 +62,13 @@ impl Parser {
         let trivalent = if self.check(&Token::Symbol(Symbol::Parentheses(Bound::Closing))) {
             Trivalent::None
         } else {
-            let value = self.expect_identifier();
+            // Handle compound types: Entity & Moveable
+            let mut value = self.expect_identifier();
+            while self.check(&Token::Symbol(Symbol::Ampersand)) {
+                self.advance(); // consume '&'
+                let next = self.expect_identifier();
+                value = format!("{} & {}", value, next);
+            }
             Trivalent::Some(value)
         };
 

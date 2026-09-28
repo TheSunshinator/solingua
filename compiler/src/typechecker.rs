@@ -176,13 +176,13 @@ impl TypeChecker {
                 },
             );
 
-            // Instance fields are accessible
+            // Instance fields are accessible (mutable within methods)
             for field in &blueprint.parameters {
                 scope.insert(
                     field.name.clone(),
                     VariableInfo {
                         type_name: field.type_name.clone(),
-                        mutable: false,
+                        mutable: true,
                     },
                 );
             }

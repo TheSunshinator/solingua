@@ -1,7 +1,7 @@
 use crate::ast::{
     ArithmeticOperator, ComparisonOperator, ConditionBranch,
     Expression, LogicalOperator, Program, Statement, StringTemplatePart,
-    Declaration, FunctionDeclaration, ValueDeclaration, Parameter,
+    BlueprintDeclaration, Declaration, FunctionDeclaration, ValueDeclaration, Parameter,
 };
 use crate::lexer::{Span, SpannedToken, Token};
 use crate::lexer::keyword::Keyword;
@@ -58,6 +58,8 @@ fn prefix_binding_power(token: &Token) -> Option<u8> {
     match token {
         // ¬ (logical not) — tighter than ∧/∨ but looser than comparison
         Token::Symbol(Symbol::Logical(Logical::Not)) => Some(9),
+        // Unary minus — same precedence as multiplicative
+        Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus)) => Some(9),
         _ => None,
     }
 }
@@ -88,9 +90,24 @@ impl Parser {
                 let decl = self.parse_function_declaration();
                 Declaration::Function(decl)
             }
+            Token::Keyword(Keyword::Type) => {
+                let decl = self.parse_type_declaration();
+                Declaration::Blueprint(decl)
+            }
+            Token::Keyword(Keyword::Singleton) => {
+                let name = self.expect_identifier();
+                self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+                let _labels = self.parse_label_declaration();
+                // Skip instance section if present
+                if self.check(&Token::Keyword(Keyword::Instance)) {
+                    self.advance();
+                }
+                self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+                Declaration::Singleton(name)
+            }
             other => {
                 let span = self.current_span();
-                panic!("{}:{}: Expected construct type (function, value, ...), got {:?}",
+                panic!("{}:{}: Expected construct type (ƒ, type, singleton, ...), got {:?}",
                     span.line, span.column, other);
             }
         }
@@ -135,6 +152,87 @@ impl Parser {
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
 
         FunctionDeclaration { name, parameters, return_type, body }
+    }
+
+    fn parse_type_declaration(&mut self) -> BlueprintDeclaration {
+        let name = self.expect_identifier();
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
+
+        let labels = self.parse_label_declaration();
+
+        // Extract label info
+        let mut implements: Option<String> = None;
+        let mut is_declared = false;
+        let mut generic_params: Vec<String> = Vec::new();
+        for ld in &labels {
+            match &ld.label {
+                super::label::Label::Return(Trivalent::Some(parent)) => {
+                    implements = Some(parent.clone());
+                }
+                super::label::Label::Implementation(Trivalent::Some(impl_type)) => {
+                    is_declared = impl_type == "none";
+                }
+                super::label::Label::Generics(Trivalent::Some(generics)) => {
+                    generic_params = generics.clone();
+                }
+                _ => {}
+            }
+        }
+
+        // parameters section
+        let mut parameters = Vec::new();
+        if self.check(&Token::Keyword(Keyword::Parameters)) {
+            self.advance();
+            while self.check(&Token::Keyword(Keyword::Let)) {
+                // Peek ahead to distinguish `let value` from `let 𝑓`
+                if self.is_next(&Token::Keyword(Keyword::Value)) {
+                    parameters.push(self.parse_parameter());
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // instance section
+        let mut methods = Vec::new();
+        if self.check(&Token::Keyword(Keyword::Instance)) {
+            self.advance();
+            while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+                if self.check(&Token::Keyword(Keyword::Let)) {
+                    if self.is_next(&Token::Symbol(Symbol::Function)) {
+                        // let 𝑓 methodName { ... }
+                        self.expect_token(&Token::Keyword(Keyword::Let));
+                        self.expect_token(&Token::Symbol(Symbol::Function));
+                        methods.push(self.parse_function_declaration());
+                    } else if self.is_next(&Token::Keyword(Keyword::Value)) {
+                        // let value name { ... } — instance value, parse as parameter
+                        parameters.push(self.parse_parameter());
+                    } else {
+                        let span = self.current_span();
+                        panic!("{}:{}: Expected 𝑓 or value after let in instance block",
+                            span.line, span.column);
+                    }
+                } else {
+                    // Loose statement in instance block (e.g. printLine(...))
+                    // Skip for now — parse and discard
+                    self.parse_statement();
+                    if self.check(&Token::Symbol(Symbol::Semicolon)) {
+                        self.advance();
+                    }
+                }
+            }
+        }
+
+        self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
+
+        BlueprintDeclaration {
+            name,
+            parameters,
+            methods,
+            is_declared,
+            implements,
+            generic_params,
+        }
     }
 
     fn parse_parameter(&mut self) -> Parameter {
@@ -281,35 +379,22 @@ impl Parser {
         let name = self.expect_identifier();
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
 
+        // Parse labels
+        let labels = self.parse_label_declaration();
+
         let mut type_name = "Unknown".to_string();
         let mut type_argument: Option<String> = None;
-        let mut assigned_value: Option<Expression> = None;
-
-        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
-            match self.current().clone() {
-                Token::Symbol(Symbol::Label) => {
-                    while self.check(&Token::Symbol(Symbol::Label)) {
-                        self.advance();
-                        match self.current().clone() {
-                            Token::Keyword(Keyword::Type) => {
-                                self.advance();
-                                self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Opening)));
-                                type_name = self.expect_identifier();
-                                self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
-                            }
-                            _ => { self.advance(); }
-                        }
-                    }
-                }
-                Token::Identifier(ref s) if s == "means" => {
-                    self.advance();
-                    assigned_value = Some(self.parse_expression());
-                }
-                other => {
-                    let span = self.current_span();
-                    panic!("{}:{}: Unexpected in value declaration: {:?}", span.line, span.column, other);
-                }
+        for ld in &labels {
+            if let super::label::Label::Return(Trivalent::Some(t)) = &ld.label {
+                type_name = t.clone();
             }
+        }
+
+        // Parse initially expression
+        let mut assigned_value: Option<Expression> = None;
+        if self.check(&Token::Keyword(Keyword::Initially)) {
+            self.advance();
+            assigned_value = Some(self.parse_expression());
         }
 
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
@@ -336,6 +421,14 @@ impl Parser {
             match op_token {
                 Token::Symbol(Symbol::Logical(Logical::Not)) => {
                     Expression::LogicalNot(Box::new(rhs))
+                }
+                Token::Symbol(Symbol::Arithmetic(Arithmetic::Minus)) => {
+                    // Unary minus: -x → 0 - x
+                    Expression::Arithmetic {
+                        left: Box::new(Expression::IntegerLiteral(0)),
+                        operator: ArithmeticOperator::Subtract,
+                        right: Box::new(rhs),
+                    }
                 }
                 _ => unreachable!(),
             }
