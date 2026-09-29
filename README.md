@@ -349,6 +349,19 @@ while counter < 10 {
 if x > 5 ∧ x < 10 then printLine(x);
 ```
 
+### Comments
+
+`※` for single line comments
+`※※` for multiline comments
+
+```
+someCode() ※ This is a comment
+※※
+This is a multiline comment
+This is also part of the comment
+※※
+```
+
 ### Type
 #### Full implementation
 ```
@@ -473,7 +486,6 @@ where local means it's a sealed type, none means it's a final type, and any mean
 - Add parent type that is inherited by all types (ex: Any, Object, Whatever)
 - Proper versioning
 - Variable-length argument (`...`?, new label?)
-- Comments (`!!`?)
 
 ### Future Features
 Anything listed below is subject to changes or even being abandoned entirely
@@ -493,9 +505,9 @@ No wildcard
 #### Calling super
 Call the parent implementation. Required
 ```
-ascendant(); !! Option 1, fits with `descendants` label
-default(); !! Option 2
-inherited(); !! Option 3, keyword already exists
+ascendant(); ※ Option 1, fits with `descendants` label
+default(); ※ Option 2
+inherited(); ※ Option 3, keyword already exists
 
 ```
 
@@ -566,8 +578,8 @@ list → add(
 ```
 let enumeration Event {
     #…
-    parameters !! Constructor parameters
-    instance … !! Contracts and partial implementations
+    parameters ※ Constructor parameters
+    instance … ※ Contracts and partial implementations
     list[
         let singleton BackRequested { … }
         let type SaveClicked { … }
@@ -637,7 +649,7 @@ factorial: Integer is { [n: Integer]
 ```
 A value would look like the following:
 ```
-isValid: Boolean is true !! immutable unless explicitely marked
+isValid: Boolean is true ※ immutable unless explicitely marked
 
 #mutable
 counter: Integer is 0

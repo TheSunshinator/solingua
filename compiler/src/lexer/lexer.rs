@@ -38,7 +38,9 @@ impl Lexer {
 
     pub fn tokenize(&self) -> Vec<SpannedToken> {
         let pattern = Regex::new(concat!(
-            r#""(?:[^"\\]|\\.)*""#,   // strings (with escaped chars)
+            r"※※[\s\S]*?※※",          // multiline comments (※※ ... ※※)
+            r"|※[^\n]*",                  // single-line comments (※ to end of line)
+            r#"|"(?:[^"\\]|\\.)*""#,  // strings (with escaped chars)
             r"|[a-zA-Z_][a-zA-Z0-9_]*", // words (identifiers/keywords)
             r"|\d+",                     // integers
             r"|[><=≥≤≠(){}\[\],+\-×/;#|&𝑓⟨⟩∧∨¬→]",  // single-char symbols and operators
@@ -60,6 +62,11 @@ impl Lexer {
             let span = Span { line, column };
             let chunk = mat.as_str();
             last_end = mat.end();
+
+            // Skip comments (single-line ※ and multiline ※※...※※)
+            if chunk.starts_with('※') {
+                continue;
+            }
 
             let token = Self::classify(chunk);
             tokens.push(SpannedToken { token, span });
@@ -357,6 +364,55 @@ mod tests {
         assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
         assert_eq!(tokens[1], Token::Symbol(Symbol::Function));
         assert_eq!(tokens[2], Token::Identifier("main".to_string()));
+    }
+
+    #[test]
+    fn test_comment_ignored() {
+        assert_eq!(tokenize("※ this is a comment"), vec![
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_comment_after_code() {
+        assert_eq!(tokenize("42 ※ a comment"), vec![
+            Token::Literal(Literal::Integer(42)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_comment_does_not_consume_next_line() {
+        assert_eq!(tokenize("42 ※ comment\n7"), vec![
+            Token::Literal(Literal::Integer(42)),
+            Token::Literal(Literal::Integer(7)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_multiline_comment() {
+        assert_eq!(tokenize("※※ this is\na multiline\ncomment ※※"), vec![
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_multiline_comment_between_code() {
+        assert_eq!(tokenize("1 ※※ comment ※※ 2"), vec![
+            Token::Literal(Literal::Integer(1)),
+            Token::Literal(Literal::Integer(2)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_multiline_comment_spanning_lines() {
+        assert_eq!(tokenize("1\n※※\nmultiline\n※※\n2"), vec![
+            Token::Literal(Literal::Integer(1)),
+            Token::Literal(Literal::Integer(2)),
+            Token::EndOfFile,
+        ]);
     }
 
     #[test]

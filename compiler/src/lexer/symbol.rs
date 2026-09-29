@@ -2,6 +2,7 @@
 pub enum Symbol {
     Comma,
     Semicolon,
+    Comment,
     Arrow,
     Pipe,
     Ampersand,
@@ -51,6 +52,7 @@ impl Symbol {
             '×' => Some(Symbol::Arithmetic(Arithmetic::Times)),
             '/' => Some(Symbol::Arithmetic(Arithmetic::Divided)),
             ';' => Some(Symbol::Semicolon),
+            '※' => Some(Symbol::Comment),
             '→' => Some(Symbol::Arrow),
             '|' => Some(Symbol::Pipe),
             '&' => Some(Symbol::Ampersand),
@@ -102,6 +104,11 @@ mod tests {
     #[test]
     fn test_semicolon() {
         assert_eq!(Symbol::from(';'), Some(Symbol::Semicolon));
+    }
+
+    #[test]
+    fn test_comment() {
+        assert_eq!(Symbol::from('※'), Some(Symbol::Comment));
     }
 
     #[test]
