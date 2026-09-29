@@ -536,6 +536,10 @@ impl Parser {
                 self.advance();
                 Expression::IntegerLiteral(value)
             }
+            Token::Literal(Literal::Float(value)) => {
+                self.advance();
+                Expression::FloatLiteral(value)
+            }
             Token::Literal(Literal::Boolean(value)) => {
                 self.advance();
                 Expression::BooleanLiteral(value)

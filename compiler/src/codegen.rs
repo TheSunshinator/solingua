@@ -277,6 +277,7 @@ impl CodeGenerator {
                 }
             }
             Expression::IntegerLiteral(_)
+            | Expression::FloatLiteral(_)
             | Expression::BooleanLiteral(_)
             | Expression::ValueReference(_) => {}
         }
@@ -600,6 +601,9 @@ impl CodeGenerator {
             Expression::IntegerLiteral(value) => {
                 self.emit(&format!("    mov x0, #{value}"));
             }
+            Expression::FloatLiteral(_) => {
+                panic!("Float codegen not yet implemented");
+            }
             Expression::BooleanLiteral(value) => {
                 let num = if *value { 1 } else { 0 };
                 self.emit(&format!("    mov x0, #{num}"));
@@ -804,7 +808,7 @@ impl CodeGenerator {
 
     fn expression_is_integer(&self, expression: &Expression) -> bool {
         match expression {
-            Expression::IntegerLiteral(_) => true,
+            Expression::IntegerLiteral(_) | Expression::FloatLiteral(_) => true,
             Expression::Arithmetic { .. } => true,
             Expression::ValueReference(name) => {
                 self.variable_types.get(name).map_or(false, |t| t == "Integer")

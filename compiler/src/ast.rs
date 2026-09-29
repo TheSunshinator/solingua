@@ -103,6 +103,7 @@ pub enum Expression {
     StringLiteral(String),
     StringTemplate { parts: Vec<StringTemplatePart> },
     IntegerLiteral(i64),
+    FloatLiteral(f64),
     BooleanLiteral(bool),
     ValueReference(String),
     MemberAccess {

@@ -6,6 +6,7 @@ pub enum Symbol {
     Arrow,
     Pipe,
     Ampersand,
+    Natural,
     Function,
     Label,
     Arithmetic(Arithmetic),
@@ -57,6 +58,7 @@ impl Symbol {
             '|' => Some(Symbol::Pipe),
             '&' => Some(Symbol::Ampersand),
             '#' => Some(Symbol::Label),
+            'ℕ' => Some(Symbol::Natural),
             '𝑓' => Some(Symbol::Function),
             '⟨' => Some(Symbol::Generics(Bound::Opening)),
             '⟩' => Some(Symbol::Generics(Bound::Closing)),
@@ -125,6 +127,11 @@ mod tests {
     #[test]
     fn test_label() {
         assert_eq!(Symbol::from('#'), Some(Symbol::Label));
+    }
+
+    #[test]
+    fn test_natural() {
+        assert_eq!(Symbol::from('ℕ'), Some(Symbol::Natural));
     }
 
     #[test]

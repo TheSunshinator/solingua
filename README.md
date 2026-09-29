@@ -287,6 +287,93 @@ let value counter {
 counter becomes counter + 1;
 ```
 
+### Literals
+
+#### Boolean
+```
+true
+false
+```
+
+#### String
+```
+"Hello world!"
+"Hello \(name)!"   ※ string template with interpolation
+```
+
+#### Numeric
+
+Plain digits are `Integer` by default. A decimal point produces a `Decimal` (float).
+
+```
+42                 ※ Integer
+3.14               ※ Decimal
+```
+
+##### Base notation
+
+Use subscript digits to specify the base:
+
+```
+1010₂             ※ binary Integer: 10
+FF₁₆              ※ hexadecimal Integer: 255
+```
+
+Hex digits must be uppercase `A`–`F`.
+
+##### Type annotations
+
+Use `#` followed by a type name to annotate the numeric type:
+
+|  Type   | Description                      |
+|:-------:|:---------------------------------|
+|   Bit   | 1-bit value (0 or 1)             |
+|  Byte   | 8-bit signed integer             |
+|  Short  | 16-bit signed integer            |
+| Integer | 32-bit signed (default)          |
+|  Long   | 64-bit signed integer            |
+| Decimal | Floating-point (default for `.`) |
+
+```
+42#Long            ※ Long integer
+255#Byte           ※ Byte
+1000#Short         ※ Short integer
+1#Bit              ※ Bit
+3.14#Decimal       ※ explicit Decimal
+```
+
+##### Unsigned
+
+Use `ℕ` (natural numbers) to mark unsigned. On its own, it means unsigned Integer:
+
+```
+42#ℕ               ※ unsigned Integer
+42#ℕLong           ※ unsigned Long
+255#ℕByte          ※ unsigned Byte
+```
+
+##### Combined
+
+Base, signedness, and type compose freely:
+
+```
+FF₁₆#ℕByte         ※ hexadecimal, unsigned Byte: 255
+1010₂#Long         ※ binary Long: 10
+11111111₂#ℕByte    ※ binary, unsigned Byte: 255
+```
+
+Grammar:
+```
+decimalDigit    = "0"..."9" ;
+hexDigit        = decimalDigit | "A"..."F" ;
+binaryDigit     = "0" | "1" ;
+integerLiteral  = decimalDigit+ | binaryDigit+ , "₂" | hexDigit+ , "₁₆" ;
+floatLiteral    = decimalDigit+ , "." , decimalDigit+ ;
+numericType     = "Bit" | "Byte" | "Short" | "Integer" | "Long" | "Decimal" ;
+typeAnnotation  = "#" , ("ℕ" | "ℕ"? , numericType) ;
+numericLiteral  = (integerLiteral | floatLiteral) , typeAnnotation? ;
+```
+
 ### If expressions (multi-branch)
 
 Used to produce a value. If used to return or initiate a value, they must include an `else` branch:

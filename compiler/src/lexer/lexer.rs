@@ -38,12 +38,15 @@ impl Lexer {
 
     pub fn tokenize(&self) -> Vec<SpannedToken> {
         let pattern = Regex::new(concat!(
-            r"※※[\s\S]*?※※",          // multiline comments (※※ ... ※※)
-            r"|※[^\n]*",                  // single-line comments (※ to end of line)
-            r#"|"(?:[^"\\]|\\.)*""#,  // strings (with escaped chars)
-            r"|[a-zA-Z_][a-zA-Z0-9_]*", // words (identifiers/keywords)
-            r"|\d+",                     // integers
-            r"|[><=≥≤≠(){}\[\],+\-×/;#|&𝑓⟨⟩∧∨¬→]",  // single-char symbols and operators
+            r"※※[\s\S]*?※※",            // multiline comments (※※ ... ※※)
+            r"|※[^\n]*",                    // single-line comments (※ to end of line)
+            r#"|"(?:[^"\\]|\\.)*""#,    // strings (with escaped chars)
+            r"|[0-9A-F]+₁₆",              // hex integers (FF₁₆)
+            r"|[01]+₂",                    // binary integers (1010₂)
+            r"|\d+\.\d+",                  // float literals (3.14)
+            r"|[a-zA-Z_][a-zA-Z0-9_]*",   // words (identifiers/keywords)
+            r"|\d+",                       // integers
+            r"|[><=≥≤≠(){}\[\],+\-×/;#|&𝑓⟨⟩∧∨¬→ℕ]",  // single-char symbols and operators
         )).unwrap();
 
         let mut tokens = Vec::new();
@@ -81,6 +84,33 @@ impl Lexer {
     }
 
     fn classify(chunk: &str) -> Token {
+        // Hex literal: FF₁₆
+        if let Some(hex_digits) = chunk.strip_suffix("₁₆") {
+            if !hex_digits.is_empty() {
+                let value = i64::from_str_radix(hex_digits, 16).unwrap_or_else(|_| {
+                    panic!("Invalid hex literal: {}", chunk);
+                });
+                return Token::Literal(Literal::Integer(value));
+            }
+        }
+
+        // Binary literal: 1010₂
+        if let Some(bin_digits) = chunk.strip_suffix('₂') {
+            if !bin_digits.is_empty() {
+                let value = i64::from_str_radix(bin_digits, 2).unwrap_or_else(|_| {
+                    panic!("Invalid binary literal: {}", chunk);
+                });
+                return Token::Literal(Literal::Integer(value));
+            }
+        }
+
+        // Float literal: 3.14
+        if chunk.contains('.') {
+            if let Ok(value) = chunk.parse::<f64>() {
+                return Token::Literal(Literal::Float(value));
+            }
+        }
+
         let chars: Vec<char> = chunk.chars().collect();
 
         if chars.len() == 1 {
@@ -411,6 +441,125 @@ mod tests {
         assert_eq!(tokenize("1\n※※\nmultiline\n※※\n2"), vec![
             Token::Literal(Literal::Integer(1)),
             Token::Literal(Literal::Integer(2)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    // === Numeric literal tests ===
+
+    #[test]
+    fn test_binary_literal() {
+        assert_eq!(tokenize("1010₂"), vec![
+            Token::Literal(Literal::Integer(10)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_binary_literal_single_bit() {
+        assert_eq!(tokenize("1₂"), vec![
+            Token::Literal(Literal::Integer(1)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_binary_literal_byte() {
+        assert_eq!(tokenize("11111111₂"), vec![
+            Token::Literal(Literal::Integer(255)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_hex_literal() {
+        assert_eq!(tokenize("FF₁₆"), vec![
+            Token::Literal(Literal::Integer(255)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_hex_literal_mixed_digits() {
+        assert_eq!(tokenize("1A3₁₆"), vec![
+            Token::Literal(Literal::Integer(419)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_hex_literal_zero() {
+        assert_eq!(tokenize("0₁₆"), vec![
+            Token::Literal(Literal::Integer(0)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_float_literal() {
+        assert_eq!(tokenize("3.14"), vec![
+            Token::Literal(Literal::Float(3.14)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_float_literal_zero() {
+        assert_eq!(tokenize("0.5"), vec![
+            Token::Literal(Literal::Float(0.5)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_float_literal_whole() {
+        assert_eq!(tokenize("100.0"), vec![
+            Token::Literal(Literal::Float(100.0)),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_natural_symbol() {
+        let tokens = tokenize("42#ℕLong");
+        assert_eq!(tokens[0], Token::Literal(Literal::Integer(42)));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Natural));
+        assert_eq!(tokens[3], Token::Identifier("Long".to_string()));
+    }
+
+    #[test]
+    fn test_unsigned_integer_shorthand() {
+        let tokens = tokenize("1234#ℕ");
+        assert_eq!(tokens[0], Token::Literal(Literal::Integer(1234)));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Natural));
+        assert_eq!(tokens[3], Token::EndOfFile);
+    }
+
+    #[test]
+    fn test_hex_with_type_annotation() {
+        let tokens = tokenize("FF₁₆#Byte");
+        assert_eq!(tokens[0], Token::Literal(Literal::Integer(255)));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[2], Token::Identifier("Byte".to_string()));
+    }
+
+    #[test]
+    fn test_binary_with_unsigned_type() {
+        let tokens = tokenize("1010₂#ℕByte");
+        assert_eq!(tokens[0], Token::Literal(Literal::Integer(10)));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Natural));
+        assert_eq!(tokens[3], Token::Identifier("Byte".to_string()));
+    }
+
+    #[test]
+    fn test_float_not_confused_with_integer() {
+        assert_eq!(tokenize("3.14 + 1"), vec![
+            Token::Literal(Literal::Float(3.14)),
+            Token::Symbol(Symbol::Arithmetic(Arithmetic::Plus)),
+            Token::Literal(Literal::Integer(1)),
             Token::EndOfFile,
         ]);
     }

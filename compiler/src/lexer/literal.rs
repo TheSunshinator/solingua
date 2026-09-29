@@ -2,6 +2,7 @@
 pub enum Literal {
     Boolean(bool),
     Integer(i64),
+    Float(f64),
     String(StringLiteral),
 }
 
@@ -35,6 +36,7 @@ impl Literal {
         match self {
             Literal::Boolean(true) => 4,
             Literal::Boolean(false) => 5,
+            Literal::Float(x) => format!("{}", x).len(),
             Literal::Integer(x) => {
                 if *x == 0 {
                     1
@@ -295,6 +297,12 @@ mod tests {
         let input: Vec<char> = r#""Hello \(name)!""#.chars().collect();
         let result = Literal::from(|i| input.get(i).copied()).unwrap();
         assert_eq!(result.declaration_size(), 16);
+    }
+
+    #[test]
+    fn test_float_declaration_size() {
+        let lit = Literal::Float(3.14);
+        assert_eq!(lit.declaration_size(), 4); // "3.14"
     }
 
     #[test]

@@ -312,6 +312,7 @@ impl TypeChecker {
     ) -> Option<String> {
         match expression {
             Expression::IntegerLiteral(_) => Some("Integer".to_string()),
+            Expression::FloatLiteral(_) => Some("Decimal".to_string()),
             Expression::StringLiteral(_) => Some("String".to_string()),
             Expression::BooleanLiteral(_) => Some("Boolean".to_string()),
             Expression::ValueReference(name) => {
