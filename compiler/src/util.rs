@@ -3,12 +3,14 @@
 /// - `None` — the label applies but has no value (e.g., `return()`, `generics()`)
 /// - `Some(T)` — the label has a value
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum Trivalent<T> {
     NotApplicable,
     None,
     Some(T),
 }
 
+#[allow(dead_code)]
 impl<T> Trivalent<T> {
     pub fn is_applicable(&self) -> bool {
         !matches!(self, Trivalent::NotApplicable)

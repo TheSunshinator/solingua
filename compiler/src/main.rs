@@ -33,7 +33,7 @@ fn main() {
     });
 
     // Lex
-    let mut lexer = Lexer::new(&source);
+    let lexer = Lexer::new(&source);
     let tokens = lexer.tokenize();
 
     if verbose {
@@ -45,7 +45,7 @@ fn main() {
     }
 
     // Parse
-    let mut parser = Parser::new(tokens, verbose);
+    let mut parser = Parser::new(tokens);
     let program = parser.parse_program();
 
     if verbose {

@@ -83,6 +83,7 @@ impl Keyword {
         }
     }
 
+    #[allow(dead_code)]
     pub fn declaration_size(&self) -> usize {
         match self {
             Keyword::Let => 3,

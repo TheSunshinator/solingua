@@ -1,7 +1,10 @@
 use crate::lexer::keyword::Keyword;
 use crate::lexer::literal::{Literal, StringLiteral};
 use crate::lexer::symbol::{Symbol, Bound};
-use crate::lexer::{Span, Token};
+use crate::lexer::Token;
+
+#[cfg(test)]
+use crate::lexer::Span;
 use crate::util::Trivalent;
 use super::parser::Parser;
 
@@ -19,7 +22,6 @@ pub enum Label {
 #[derive(Debug, Clone)]
 pub struct LabelDefinition {
     pub label: Label,
-    pub span: Span,
 }
 
 impl Parser {
@@ -28,7 +30,6 @@ impl Parser {
 
         while self.check(&Token::Symbol(Symbol::Label)) {
             self.advance(); // consume #
-            let span = self.current_span();
 
             let label = match self.current() {
                 Token::Keyword(Keyword::Return) => self.parse_label_return_value(),
@@ -44,7 +45,7 @@ impl Parser {
                 }
             };
 
-            labels.push(LabelDefinition { label, span });
+            labels.push(LabelDefinition { label });
         }
 
         // Consume optional terminating semicolon
@@ -170,11 +171,7 @@ impl Parser {
         }
     }
 
-    fn skip_comma(&mut self) {
-        if self.check(&Token::Symbol(Symbol::Comma)) {
-            self.advance();
-        }
-    }
+
 }
 
 #[cfg(test)]
@@ -195,7 +192,7 @@ mod tests {
             .into_iter()
             .map(|token| SpannedToken { token, span: Span { line: 1, column: 1 } })
             .collect();
-        Parser::new(spanned, false)
+        Parser::new(spanned)
     }
 
     fn label_tokens(inner: Vec<Token>) -> Vec<Token> {

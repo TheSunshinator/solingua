@@ -30,6 +30,7 @@ impl Literal {
         }
     }
 
+    #[allow(dead_code)]
     pub fn declaration_size(&self) -> usize {
         match self {
             Literal::Boolean(true) => 4,
@@ -47,6 +48,7 @@ impl Literal {
 }
 
 impl StringLiteral {
+    #[allow(dead_code)]
     fn declaration_size(&self) -> usize {
         match self {
             StringLiteral::Plain(s) => s.len() + 2, // +2 for the quotes

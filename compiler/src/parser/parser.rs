@@ -1,7 +1,7 @@
 use crate::ast::{
     ArithmeticOperator, ComparisonOperator, ConditionBranch,
     Expression, LogicalOperator, Program, Statement, StringTemplatePart,
-    BlueprintDeclaration, Declaration, FunctionDeclaration, ValueDeclaration, Parameter,
+    BlueprintDeclaration, Declaration, FunctionDeclaration, Parameter,
 };
 use crate::lexer::{Span, SpannedToken, Token};
 use crate::lexer::keyword::Keyword;
@@ -13,7 +13,6 @@ use crate::util::Trivalent;
 pub struct Parser {
     tokens: Vec<SpannedToken>,
     position: usize,
-    verbose: bool,
 }
 
 // === Binding powers for Pratt parsing ===
@@ -65,8 +64,8 @@ fn prefix_binding_power(token: &Token) -> Option<u8> {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<SpannedToken>, verbose: bool) -> Self {
-        Parser { tokens, position: 0, verbose }
+    pub fn new(tokens: Vec<SpannedToken>) -> Self {
+        Parser { tokens, position: 0 }
     }
 
     pub fn parse_program(&mut self) -> Program {
@@ -255,43 +254,6 @@ impl Parser {
         Parameter { name, type_name }
     }
 
-    fn parse_parameter_list(&mut self) -> Vec<Parameter> {
-        let mut parameters = Vec::new();
-
-        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
-            self.expect_token(&Token::Keyword(Keyword::Let));
-            let name = self.expect_identifier();
-            self.expect_token(&Token::Keyword(Keyword::Value));
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
-
-            let labels = self.parse_label_declaration();
-
-            let mut type_name = "Unknown".to_string();
-            for ld in &labels {
-                if let super::label::Label::Return(Trivalent::Some(t)) = &ld.label {
-                    type_name = t.clone();
-                }
-            }
-
-            self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
-
-            parameters.push(Parameter { name, type_name });
-        }
-
-        parameters
-    }
-
-    fn parse_statement_list(&mut self) -> Vec<Statement> {
-        let mut statements = Vec::new();
-        while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
-            statements.push(self.parse_statement());
-            if self.check(&Token::Symbol(Symbol::Semicolon)) {
-                self.advance();
-            }
-        }
-        statements
-    }
-
     // === Statements ===
 
     pub(crate) fn parse_statement(&mut self) -> Statement {
@@ -383,7 +345,7 @@ impl Parser {
         let labels = self.parse_label_declaration();
 
         let mut type_name = "Unknown".to_string();
-        let mut type_argument: Option<String> = None;
+        let type_argument: Option<String> = None;
         for ld in &labels {
             if let super::label::Label::Return(Trivalent::Some(t)) = &ld.label {
                 type_name = t.clone();
@@ -563,7 +525,6 @@ impl Parser {
                         StringPart::Interpolation(s) => {
                             let mut sub_parser = Parser::new(
                                 crate::lexer::Lexer::new(&s).tokenize(),
-                                false,
                             );
                             let expr = sub_parser.parse_expression();
                             StringTemplatePart::Expression(expr)
@@ -726,7 +687,7 @@ mod tests {
 
     fn parse_expr(input: &str) -> Expression {
         let tokens = crate::lexer::Lexer::new(input).tokenize();
-        let mut parser = Parser::new(tokens, false);
+        let mut parser = Parser::new(tokens);
         parser.parse_expression()
     }
 

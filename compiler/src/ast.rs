@@ -6,6 +6,7 @@ pub struct Program {
 
 /// A top-level declaration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Declaration {
     Function(FunctionDeclaration),
     Blueprint(BlueprintDeclaration),
@@ -25,6 +26,7 @@ pub struct FunctionDeclaration {
 
 /// A value declaration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValueDeclaration {
     pub name: String,
     pub type_name: String,
@@ -49,14 +51,16 @@ pub struct ComputedValue {
     pub expression: Expression,
 }
 
-/// A blueprint (class or interface) declaration
+/// A type declaration (blueprint)
 #[derive(Debug, Clone)]
 pub struct BlueprintDeclaration {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub methods: Vec<FunctionDeclaration>,
     pub is_declared: bool,
+    #[allow(dead_code)]
     pub implements: Option<String>,
+    #[allow(dead_code)]
     pub generic_params: Vec<String>,
 }
 
