@@ -39,8 +39,13 @@ pub enum Keyword {
     Project,
     // generics label
     Generic,
-    // mutability
+    // variability (values)
     Mutable,
+    // extensibility (types, functions)
+    Extensible,
+    Open,
+    Sealed,
+    Closed,
 }
 
 impl Keyword {
@@ -79,6 +84,10 @@ impl Keyword {
             "project" => Some(Keyword::Project),
             "generic" => Some(Keyword::Generic),
             "mutable" => Some(Keyword::Mutable),
+            "extensible" => Some(Keyword::Extensible),
+            "open" => Some(Keyword::Open),
+            "sealed" => Some(Keyword::Sealed),
+            "closed" => Some(Keyword::Closed),
             _ => None,
         }
     }
@@ -117,6 +126,10 @@ impl Keyword {
             Keyword::Project => 7,
             Keyword::Generic => 7,
             Keyword::Mutable => 7,
+            Keyword::Extensible => 10,
+            Keyword::Open => 4,
+            Keyword::Sealed => 6,
+            Keyword::Closed => 6,
         }
     }
 }
@@ -185,6 +198,10 @@ mod tests {
     fn test_label_keywords() {
         assert_eq!(keyword_from("generic"), Some(Keyword::Generic));
         assert_eq!(keyword_from("mutable"), Some(Keyword::Mutable));
+        assert_eq!(keyword_from("extensible"), Some(Keyword::Extensible));
+        assert_eq!(keyword_from("open"), Some(Keyword::Open));
+        assert_eq!(keyword_from("sealed"), Some(Keyword::Sealed));
+        assert_eq!(keyword_from("closed"), Some(Keyword::Closed));
         assert_eq!(keyword_from("visibility"), Some(Keyword::Visibility));
         assert_eq!(keyword_from("scope"), Some(Keyword::Scope));
         assert_eq!(keyword_from("implementation"), Some(Keyword::Implementation));
@@ -236,6 +253,7 @@ mod tests {
         assert_eq!(keyword_from("container"), None);
         assert_eq!(keyword_from("alias"), None);
         assert_eq!(keyword_from("immutable"), None);
+
         assert_eq!(keyword_from("generics"), None);
         assert_eq!(keyword_from("function"), None);
         assert_eq!(keyword_from("labels"), None);

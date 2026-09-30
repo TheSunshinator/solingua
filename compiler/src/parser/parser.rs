@@ -196,7 +196,9 @@ impl Parser {
         let mut methods = Vec::new();
         if self.check(&Token::Keyword(Keyword::Instance)) {
             self.advance();
-            while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+            while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing)))
+                && !self.check(&Token::Keyword(Keyword::Project))
+            {
                 if self.check(&Token::Keyword(Keyword::Let)) {
                     if self.is_next(&Token::Symbol(Symbol::Function)) {
                         // let 𝑓 methodName { ... }
@@ -222,12 +224,30 @@ impl Parser {
             }
         }
 
+        // project section — nested types and other project-scoped declarations
+        let mut nested_types = Vec::new();
+        if self.check(&Token::Keyword(Keyword::Project)) {
+            self.advance();
+            while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
+                self.expect_token(&Token::Keyword(Keyword::Let));
+                if self.check(&Token::Keyword(Keyword::Type)) {
+                    self.advance();
+                    nested_types.push(self.parse_type_declaration());
+                } else {
+                    let span = self.current_span();
+                    panic!("{}:{}: Expected type after let in project block",
+                        span.line, span.column);
+                }
+            }
+        }
+
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Closing)));
 
         BlueprintDeclaration {
             name,
             parameters,
             methods,
+            nested_types,
             is_declared,
             implements,
             generic_params,

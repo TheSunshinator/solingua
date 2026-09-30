@@ -1,5 +1,5 @@
 let type Cat {
-    #return() #generic⟨⟩ #mutable(false) #visibility(public)
+    #return() #generic⟨⟩ #extensible(closed) #visibility(public)
     #scope(project) #implementation(full);
 
     parameters
@@ -9,7 +9,7 @@ let type Cat {
 
     instance
     let 𝑓 speak {
-        #return() #generic⟨⟩ #mutable(false) #visibility(public)
+        #return() #generic⟨⟩ #extensible(closed) #visibility(public)
         #scope(instance) #implementation(full) #contract();
 
         parameters
@@ -20,7 +20,7 @@ let type Cat {
 }
 
 let type Point {
-    #return() #generic⟨⟩ #mutable(false) #visibility(public)
+    #return() #generic⟨⟩ #extensible(closed) #visibility(public)
     #scope(project) #implementation(full);
 
     parameters
@@ -33,7 +33,7 @@ let type Point {
 
     instance
     let 𝑓 moveBy {
-        #return() #generic⟨⟩ #mutable(false) #visibility(public)
+        #return() #generic⟨⟩ #extensible(closed) #visibility(public)
         #scope(instance) #implementation(full) #contract();
 
         parameters
@@ -51,7 +51,7 @@ let type Point {
 }
 
 let 𝑓 main {
-    #return() #generic⟨⟩ #mutable(false) #visibility(public)
+    #return() #generic⟨⟩ #visibility(public)
     #scope(project) #implementation(full);
 
     parameters

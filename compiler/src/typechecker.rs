@@ -7,7 +7,7 @@ use crate::ast::{
 #[derive(Clone, Debug)]
 struct VariableInfo {
     type_name: String,
-    mutable: bool,
+    variable: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -67,37 +67,7 @@ impl TypeChecker {
                     self.functions.insert(function.name.clone(), info);
                 }
                 Declaration::Blueprint(blueprint) => {
-                    let fields: Vec<(String, String)> = blueprint
-                        .parameters
-                        .iter()
-                        .map(|p| (p.name.clone(), p.type_name.clone()))
-                        .collect();
-
-                    let mut methods = HashMap::new();
-                    for method in &blueprint.methods {
-                        methods.insert(
-                            method.name.clone(),
-                            FunctionInfo {
-                                parameter_types: method
-                                    .parameters
-                                    .iter()
-                                    .map(|p| p.type_name.clone())
-                                    .collect(),
-                                return_type: method.return_type.clone(),
-                            },
-                        );
-                    }
-
-                    let param_count = blueprint.parameters.len();
-                    self.blueprints.insert(
-                        blueprint.name.clone(),
-                        BlueprintInfo {
-                            fields,
-                            constructor_param_count: param_count,
-                            methods,
-                            is_declared: blueprint.is_declared,
-                        },
-                    );
+                    self.register_blueprint_recursive(blueprint, "");
                 }
                 Declaration::Container(container) => {
                     let mut fields: Vec<(String, String)> = container
@@ -127,6 +97,58 @@ impl TypeChecker {
         }
     }
 
+    fn register_blueprint_recursive(&mut self, blueprint: &BlueprintDeclaration, prefix: &str) {
+        let qualified_name = if prefix.is_empty() {
+            blueprint.name.clone()
+        } else {
+            format!("{}_{}", prefix, blueprint.name)
+        };
+
+        let fields: Vec<(String, String)> = blueprint
+            .parameters
+            .iter()
+            .map(|p| (p.name.clone(), p.type_name.clone()))
+            .collect();
+
+        let mut methods = HashMap::new();
+        for method in &blueprint.methods {
+            methods.insert(
+                method.name.clone(),
+                FunctionInfo {
+                    parameter_types: method
+                        .parameters
+                        .iter()
+                        .map(|p| p.type_name.clone())
+                        .collect(),
+                    return_type: method.return_type.clone(),
+                },
+            );
+        }
+
+        let param_count = blueprint.parameters.len();
+        self.blueprints.insert(
+            qualified_name.clone(),
+            BlueprintInfo {
+                fields,
+                constructor_param_count: param_count,
+                methods,
+                is_declared: blueprint.is_declared,
+            },
+        );
+
+        // Also register by simple name so nested types can be referenced directly
+        if !prefix.is_empty() {
+            self.blueprints.insert(
+                blueprint.name.clone(),
+                self.blueprints.get(&qualified_name).unwrap().clone(),
+            );
+        }
+
+        for nested in &blueprint.nested_types {
+            self.register_blueprint_recursive(nested, &qualified_name);
+        }
+    }
+
     fn check_declarations(&mut self, program: &Program) {
         for declaration in &program.declarations {
             match declaration {
@@ -153,7 +175,7 @@ impl TypeChecker {
                 parameter.name.clone(),
                 VariableInfo {
                     type_name: parameter.type_name.clone(),
-                    mutable: false,
+                    variable: false,
                 },
             );
         }
@@ -172,17 +194,17 @@ impl TypeChecker {
                 "self".to_string(),
                 VariableInfo {
                     type_name: blueprint.name.clone(),
-                    mutable: false,
+                    variable: false,
                 },
             );
 
-            // Instance fields are accessible (mutable within methods)
+            // Instance fields are accessible (variable within methods)
             for field in &blueprint.parameters {
                 scope.insert(
                     field.name.clone(),
                     VariableInfo {
                         type_name: field.type_name.clone(),
-                        mutable: true,
+                        variable: true,
                     },
                 );
             }
@@ -192,13 +214,20 @@ impl TypeChecker {
                     parameter.name.clone(),
                     VariableInfo {
                         type_name: parameter.type_name.clone(),
-                        mutable: false,
+                        variable: false,
                     },
                 );
             }
 
             for statement in &method.body {
                 self.check_statement(statement, &mut scope, &method.return_type, &method.name);
+            }
+        }
+
+        // Recursively check nested types
+        for nested in &blueprint.nested_types {
+            if !nested.is_declared {
+                self.check_blueprint(nested);
             }
         }
     }
@@ -234,13 +263,13 @@ impl TypeChecker {
                     name.clone(),
                     VariableInfo {
                         type_name: full_type,
-                        mutable: false,
+                        variable: false,
                     },
                 );
             }
             Statement::MutationStatement { name, new_value } => {
                 if let Some(info) = scope.get(name) {
-                    if !info.mutable {
+                    if !info.variable {
                         self.errors.push(format!(
                             "Cannot mutate '{}': it is declared as a value, not a variable",
                             name

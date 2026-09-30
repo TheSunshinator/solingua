@@ -1,5 +1,5 @@
 let 𝑓 factorial {
-    #return(Integer) #generic⟨⟩ #mutable(false) #visibility(public)
+    #return(Integer) #generic⟨⟩ #visibility(public)
     #scope(project) #implementation(full);
 
     parameters
@@ -12,7 +12,7 @@ let 𝑓 factorial {
 }
 
 let 𝑓 main {
-    #return() #generic⟨⟩ #mutable(false) #visibility(public)
+    #return() #generic⟨⟩ #visibility(public)
     #scope(project) #implementation(full);
 
     parameters

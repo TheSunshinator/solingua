@@ -57,6 +57,7 @@ pub struct BlueprintDeclaration {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub methods: Vec<FunctionDeclaration>,
+    pub nested_types: Vec<BlueprintDeclaration>,
     pub is_declared: bool,
     #[allow(dead_code)]
     pub implements: Option<String>,

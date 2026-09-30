@@ -4,7 +4,7 @@ Demonstrates basic function declaration and printLine
 ※※
 
 let 𝑓 main {
-    #return() #generic⟨⟩ #mutable(false) #visibility(public)
+    #return() #generic⟨⟩ #visibility(public)
     #scope(project) #implementation(full);
 
     parameters

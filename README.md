@@ -83,6 +83,7 @@ Some are optional depending on the context
 - return
 - generic
 - mutable
+- extensible
 - visibility
 - scope
 - implementation
@@ -132,22 +133,14 @@ Example:
 ```
 
 #### mutable
-Required label that denotes a construct that can be mutated or not. On a function, it means that it can or cannot be overridden. 
+Required label for values. Denotes whether the value can be reassigned.
 
-| Construct |          Meaning           |
-|:---------:|:--------------------------:|
-|   value   |  Value can be reassigned   |
-| function  | Function can be overridden |
-|   type    |    Type can be extended    |
-
-**TODO: Integrate new label for openness to be overridden**
-
-Grammar: `mutabilityLabel = "mutable(" , ("true" | "false") , "), " ;`
+Grammar: `mutableLabel = "mutable(" , ("true" | "false") , ")" ;`
 
 Example:
 ```
 let value counter {
-  #return(String) #mutable(true) …
+  #return(Integer) #mutable(true) …
   initially 0
 }
 
@@ -156,6 +149,41 @@ counter becomes counter + 1
 let value greeting {
   #return(String) #mutable(false) …
   initially "Hello world!"
+}
+
+```
+
+#### extensible
+Required label for types and instance-scoped declarations. Denotes whether the construct can be extended or overridden.
+
+| Value  | On a type                                             | On an instance declaration |
+|:------:|:------------------------------------------------------|:---------------------------|
+| open   | Can be extended by any type                           | Can be overridden          |
+| sealed | Can only be extended by types in the `project` block  | —                          |
+| closed | Cannot be extended                                    | Cannot be overridden       |
+
+Grammar: `extensibleLabel = "extensible(" , ("open" | "sealed" | "closed") , ")" ;`
+
+Example:
+```
+let type Animal {
+  #return() #extensible(open) …
+}
+
+let type Color {
+  #return() #extensible(sealed) …   ※ enumeration — children only in project block
+  project
+  let type Red { ... }
+  let type Blue { ... }
+}
+
+let type Cat {
+  #return(Animal) #extensible(closed) …
+
+  instance
+  let 𝑓 speak {
+    #return() #extensible(open) …     ※ can be overridden by child types
+  }
 }
 
 ```
@@ -235,7 +263,7 @@ Grammar:
 Examples:
 ```
 let 𝑓 main {
-    #return() #generics[] #mutable(false) #visibility(public)
+    #return() #generics[] #visibility(public)
     #scope(project) #implementation(full);
     
     parameters
@@ -244,7 +272,7 @@ let 𝑓 main {
 }
 
 let 𝑓 main {
-    #return(Integer) #generics[] #mutable(false) #visibility(public)
+    #return(Integer) #generics[] #visibility(public)
     #scope(project) #implementation(full);
     
     parameters
@@ -453,7 +481,7 @@ This is also part of the comment
 #### Full implementation
 ```
 let type Cat {
-    #return() #generics⟨⟩ #mutable(false) #visibility(public)
+    #return() #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(project) #implementation(full)
     
     parameters
@@ -463,7 +491,7 @@ let type Cat {
     
     instance
     let 𝑓 speak {
-        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #return() #generics⟨⟩ #extensible(closed) #visibility(public)
         #scope(instance) #implementation(full) #contract()
         
         parameters
@@ -477,7 +505,7 @@ Instantiation and usage:
 
 ```
 let value cat {
-    #return(Cat) #generics⟨⟩ #mutable(false) #visibility(public)
+    #return(Cat) #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
 }
@@ -489,7 +517,7 @@ printLine(cat → name)
 
 ```
 let type Animal {
-    #return() #generics[] #mutable(true) #visibility(public)
+    #return() #generics[] #extensible(open) #visibility(public)
     #scope(project) implementation(none)
     
     instance
@@ -497,14 +525,14 @@ let type Animal {
         #return(String) #mutable(false) #scope(instance) #implementation(none)
     }
     let 𝑓 speak {
-        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #return() #generics⟨⟩ #extensible(closed) #visibility(public)
         #scope(instance) #implementation(none)
         parameters
     }
 }
 
 let type Cat {
-    #return(Animal) #generics⟨⟩ #mutable(false) #visibility(public)
+    #return(Animal) #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(project) #implementation(full)
     
     parameters
@@ -514,7 +542,7 @@ let type Cat {
 
     instance
     let 𝑓 speak {
-        #return() #generics⟨⟩ #mutable(false) #visibility(public)
+        #return() #generics⟨⟩ #extensible(closed) #visibility(public)
         #scope(instance) #implementation(full) #contract(Animal)
         parameters
         body
@@ -527,7 +555,7 @@ Instantiation and usage:
 
 ```
 let value cat {
-    #return(Animal) #generics⟨⟩ #mutable(false) #visibility(public)
+    #return(Animal) #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
 }
@@ -562,9 +590,7 @@ Singletons are unique identity values with no fields or methods. Compare with `=
 | `readInput()`      | Wait for user input from the console                                        |
 
 ### TODO
-- Change `mutation` label for types as it's ambiguous on their values: 
-is the value mutable or the value can be overriden? Maybe `descendants(local | none | any)`
-where local means it's a sealed type, none means it's a final type, and any means it's an open type
+- ~~Change `mutation` label for types~~ Done: split into `#mutable` (values) and `#extensible` (types/instance declarations)
 - Block features reserved for language
   - Loops
   - Variables
@@ -738,7 +764,7 @@ A value would look like the following:
 ```
 isValid: Boolean is true ※ immutable unless explicitely marked
 
-#mutable
+#mutable(true)
 counter: Integer is 0
 ```
 A type would look like the following:

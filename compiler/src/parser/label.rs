@@ -12,7 +12,8 @@ use super::parser::Parser;
 pub enum Label {
     Return(Trivalent<String>),
     Generics(Trivalent<Vec<String>>),
-    Mutability(Trivalent<bool>),
+    Variability(Trivalent<bool>),
+    Extensibility(Trivalent<String>),
     Visibility(Trivalent<String>),
     Scope(Trivalent<String>),
     Implementation(Trivalent<String>),
@@ -35,6 +36,7 @@ impl Parser {
                 Token::Keyword(Keyword::Return) => self.parse_label_return_value(),
                 Token::Keyword(Keyword::Generic) => self.parse_label_generics_value(),
                 Token::Keyword(Keyword::Mutable) => self.parse_label_mutable_value(),
+                Token::Keyword(Keyword::Extensible) => self.parse_label_extensible_value(),
                 Token::Keyword(Keyword::Visibility) => self.parse_label_visibility_value(),
                 Token::Keyword(Keyword::Scope) => self.parse_label_scope_value(),
                 Token::Keyword(Keyword::Implementation) => self.parse_label_implementation_value(),
@@ -89,7 +91,13 @@ impl Parser {
         };
 
         self.expect_token(&Token::Symbol(Symbol::Parentheses(Bound::Closing)));
-        Label::Mutability(trivalent)
+        Label::Variability(trivalent)
+    }
+
+    fn parse_label_extensible_value(&mut self) -> Label {
+        self.advance(); // consume 'extensible'
+        let trivalent = self.parse_parenthesized_string();
+        Label::Extensibility(trivalent)
     }
 
     fn parse_label_visibility_value(&mut self) -> Label {
@@ -244,7 +252,7 @@ mod tests {
             Token::Symbol(Symbol::Parentheses(Bound::Closing)),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[0].label, Label::Mutability(Trivalent::Some(true)));
+        assert_eq!(labels[0].label, Label::Variability(Trivalent::Some(true)));
     }
 
     #[test]
@@ -257,7 +265,46 @@ mod tests {
             Token::Symbol(Symbol::Parentheses(Bound::Closing)),
         ]));
         let labels = parser.parse_label_declaration();
-        assert_eq!(labels[0].label, Label::Mutability(Trivalent::Some(false)));
+        assert_eq!(labels[0].label, Label::Variability(Trivalent::Some(false)));
+    }
+
+    #[test]
+    fn test_extensible_open() {
+        let mut parser = parser_from_tokens(label_tokens(vec![
+            Token::Symbol(Symbol::Label),
+            Token::Keyword(Keyword::Extensible),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Keyword(Keyword::Open),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+        ]));
+        let labels = parser.parse_label_declaration();
+        assert_eq!(labels[0].label, Label::Extensibility(Trivalent::Some("open".to_string())));
+    }
+
+    #[test]
+    fn test_extensible_sealed() {
+        let mut parser = parser_from_tokens(label_tokens(vec![
+            Token::Symbol(Symbol::Label),
+            Token::Keyword(Keyword::Extensible),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Keyword(Keyword::Sealed),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+        ]));
+        let labels = parser.parse_label_declaration();
+        assert_eq!(labels[0].label, Label::Extensibility(Trivalent::Some("sealed".to_string())));
+    }
+
+    #[test]
+    fn test_extensible_closed() {
+        let mut parser = parser_from_tokens(label_tokens(vec![
+            Token::Symbol(Symbol::Label),
+            Token::Keyword(Keyword::Extensible),
+            Token::Symbol(Symbol::Parentheses(Bound::Opening)),
+            Token::Keyword(Keyword::Closed),
+            Token::Symbol(Symbol::Parentheses(Bound::Closing)),
+        ]));
+        let labels = parser.parse_label_declaration();
+        assert_eq!(labels[0].label, Label::Extensibility(Trivalent::Some("closed".to_string())));
     }
 
     #[test]
@@ -343,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_full_hello_sol_labels() {
-        // #return() #generic⟨⟩ #mutable(false) #visibility(public) #scope(project) #implementation(full);
+        // #return() #generic⟨⟩ #variable(false) #visibility(public) #scope(project) #implementation(full);
         let mut parser = parser_from_tokens(label_tokens(vec![
             Token::Symbol(Symbol::Label),
             Token::Keyword(Keyword::Return),
@@ -379,7 +426,7 @@ mod tests {
         assert_eq!(labels.len(), 6);
         assert_eq!(labels[0].label, Label::Return(Trivalent::None));
         assert_eq!(labels[1].label, Label::Generics(Trivalent::None));
-        assert_eq!(labels[2].label, Label::Mutability(Trivalent::Some(false)));
+        assert_eq!(labels[2].label, Label::Variability(Trivalent::Some(false)));
         assert_eq!(labels[3].label, Label::Visibility(Trivalent::Some("public".to_string())));
         assert_eq!(labels[4].label, Label::Scope(Trivalent::Some("project".to_string())));
         assert_eq!(labels[5].label, Label::Implementation(Trivalent::Some("full".to_string())));

@@ -1,21 +1,14 @@
-IterationEnd is Singleton,
-
-Either -> {
-
+let singleton IterationEnd {
+    #return() #visibility(private) #scope(project)
 }
-    is blueprint, declared implementation,
+※※
+let type Iterable {
+    #return() #generic⟨T⟩ #extensible(open) #visibility(public) #scope(project)
+    #implementation(none)
 
-Iterable -> {
-    next -> { parameter() }
-        is function, returns T, instance scope,
-}
-    is blueprint, declared implementation, generics T,
-
-IntegerIteration -> {
-
-    next -> { parameter()
-
+    let 𝑓 next {
+        #returns(T) #generic⟨⟩ #extensible(open) #visibility(public) #scope(instance)
+        #implementation(none)
     }
-
 }
-    is blueprint, full implementation, type Iterable of Integer,
+※※

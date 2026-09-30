@@ -57,11 +57,7 @@ impl CodeGenerator {
                     functions.push(function);
                 }
                 Declaration::Blueprint(blueprint) => {
-                    if blueprint.is_declared {
-                        continue;
-                    }
-                    self.register_blueprint(blueprint);
-                    // Methods are emitted separately with blueprint-prefixed names
+                    self.register_blueprint_recursive(blueprint, "");
                 }
                 Declaration::Container(container) => {
                     self.register_container(container);
@@ -84,11 +80,7 @@ impl CodeGenerator {
         for declaration in &program.declarations {
             match declaration {
                 Declaration::Blueprint(blueprint) => {
-                    for method in &blueprint.methods {
-                        for statement in &method.body {
-                            self.collect_strings(statement);
-                        }
-                    }
+                    self.collect_strings_from_blueprint(blueprint);
                 }
                 Declaration::Container(container) => {
                     for computed in &container.computed_values {
@@ -111,6 +103,66 @@ impl CodeGenerator {
         self.emit_data_section();
 
         self.output.clone()
+    }
+
+    /// Recursively register a blueprint and its nested types.
+    /// Nested types get qualified names: Parent_Child.
+    fn register_blueprint_recursive(&mut self, blueprint: &BlueprintDeclaration, prefix: &str) {
+        let qualified_name = if prefix.is_empty() {
+            blueprint.name.clone()
+        } else {
+            format!("{}_{}", prefix, blueprint.name)
+        };
+
+        if !blueprint.is_declared {
+            let fields: Vec<(String, String)> = blueprint
+                .parameters
+                .iter()
+                .map(|p| (p.name.clone(), p.type_name.clone()))
+                .collect();
+            self.blueprints.insert(qualified_name.clone(), fields.clone());
+
+            // Also register by simple name so nested types can be referenced directly
+            if !prefix.is_empty() {
+                self.blueprints.insert(blueprint.name.clone(), fields);
+            }
+        }
+
+        for nested in &blueprint.nested_types {
+            self.register_blueprint_recursive(nested, &qualified_name);
+        }
+    }
+
+    /// Recursively emit constructors and methods for a blueprint and its nested types.
+    fn emit_blueprint_recursive(&mut self, blueprint: &BlueprintDeclaration, prefix: &str) {
+        let qualified_name = if prefix.is_empty() {
+            blueprint.name.clone()
+        } else {
+            format!("{}_{}", prefix, blueprint.name)
+        };
+
+        if !blueprint.is_declared {
+            self.emit_blueprint_constructor(blueprint);
+            for method in &blueprint.methods {
+                self.emit_method(&blueprint.name, method);
+            }
+        }
+
+        for nested in &blueprint.nested_types {
+            self.emit_blueprint_recursive(nested, &qualified_name);
+        }
+    }
+
+    /// Recursively collect string literals from a blueprint and its nested types.
+    fn collect_strings_from_blueprint(&mut self, blueprint: &BlueprintDeclaration) {
+        for method in &blueprint.methods {
+            for statement in &method.body {
+                self.collect_strings(statement);
+            }
+        }
+        for nested in &blueprint.nested_types {
+            self.collect_strings_from_blueprint(nested);
+        }
     }
 
     fn register_container(&mut self, container: &ContainerDeclaration) {
@@ -188,14 +240,6 @@ impl CodeGenerator {
         self.emit("");
     }
 
-    fn register_blueprint(&mut self, blueprint: &BlueprintDeclaration) {
-        let fields: Vec<(String, String)> = blueprint
-            .parameters
-            .iter()
-            .map(|p| (p.name.clone(), p.type_name.clone()))
-            .collect();
-        self.blueprints.insert(blueprint.name.clone(), fields);
-    }
 
     fn collect_strings(&mut self, statement: &Statement) {
         match statement {
@@ -306,16 +350,10 @@ impl CodeGenerator {
         self.emit(".globl _main");
         self.emit("");
 
-        // Emit blueprint constructors and methods (skip declared/interface blueprints)
+        // Emit blueprint constructors and methods (recursively including nested types)
         for declaration in &program.declarations {
             if let Declaration::Blueprint(blueprint) = declaration {
-                if blueprint.is_declared {
-                    continue;
-                }
-                self.emit_blueprint_constructor(blueprint);
-                for method in &blueprint.methods {
-                    self.emit_method(&blueprint.name, method);
-                }
+                self.emit_blueprint_recursive(blueprint, "");
             }
         }
 
@@ -1124,7 +1162,16 @@ impl CodeGenerator {
         match expression {
             Expression::StringLiteral(_) | Expression::StringTemplate { .. } => true,
             Expression::ValueReference(name) => {
-                self.variable_types.get(name).map_or(false, |t| t == "String")
+                if let Some(t) = self.variable_types.get(name) {
+                    return t == "String";
+                }
+                // Check instance fields of current blueprint
+                if let Some(bp_name) = &self.current_blueprint_name {
+                    if let Some(fields) = self.blueprints.get(bp_name) {
+                        return fields.iter().any(|(n, t)| n == name && t == "String");
+                    }
+                }
+                false
             }
             Expression::MemberAccess { object, member } => {
                 let full_type = self.infer_type(object);
