@@ -3,7 +3,7 @@ let type Cat {
     #scope(project) #implementation(full);
 
     parameters
-    let value name {
+    let data name {
         #return(String) #mutable(false) #scope(instance) #implementation(full);
     }
 
@@ -24,10 +24,10 @@ let type Point {
     #scope(project) #implementation(full);
 
     parameters
-    let value x {
+    let data x {
         #return(Integer) #mutable(true) #scope(instance) #implementation(full);
     }
-    let value y {
+    let data y {
         #return(Integer) #mutable(true) #scope(instance) #implementation(full);
     }
 
@@ -37,10 +37,10 @@ let type Point {
         #scope(instance) #implementation(full) #contract();
 
         parameters
-        let value dx {
+        let data dx {
             #return(Integer) #mutable(false) #scope(local) #implementation(full);
         }
-        let value dy {
+        let data dy {
             #return(Integer) #mutable(false) #scope(local) #implementation(full);
         }
 
@@ -57,14 +57,14 @@ let 𝑓 main {
     parameters
 
     body
-    let value cat {
+    let data cat {
         #return(Cat) #mutable(false) #scope(local) #implementation(full);
         initially Cat("Krokmou")
     }
     cat → speak();
     printLine(cat → name);
 
-    let value p {
+    let data p {
         #return(Point) #mutable(false) #scope(local) #implementation(full);
         initially Point(10, 20)
     }

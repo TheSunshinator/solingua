@@ -184,7 +184,7 @@ impl Parser {
             self.advance();
             while self.check(&Token::Keyword(Keyword::Let)) {
                 // Peek ahead to distinguish `let value` from `let 𝑓`
-                if self.is_next(&Token::Keyword(Keyword::Value)) {
+                if self.is_next(&Token::Keyword(Keyword::Data)) {
                     parameters.push(self.parse_parameter());
                 } else {
                     break;
@@ -205,7 +205,7 @@ impl Parser {
                         self.expect_token(&Token::Keyword(Keyword::Let));
                         self.expect_token(&Token::Symbol(Symbol::Function));
                         methods.push(self.parse_function_declaration());
-                    } else if self.is_next(&Token::Keyword(Keyword::Value)) {
+                    } else if self.is_next(&Token::Keyword(Keyword::Data)) {
                         // let value name { ... } — instance value, parse as parameter
                         parameters.push(self.parse_parameter());
                     } else {
@@ -224,8 +224,9 @@ impl Parser {
             }
         }
 
-        // project section — nested types and other project-scoped declarations
+        // project section — nested types and project-scoped (static) functions
         let mut nested_types = Vec::new();
+        let mut static_methods = Vec::new();
         if self.check(&Token::Keyword(Keyword::Project)) {
             self.advance();
             while !self.check(&Token::Symbol(Symbol::Brace(Bound::Closing))) {
@@ -233,9 +234,12 @@ impl Parser {
                 if self.check(&Token::Keyword(Keyword::Type)) {
                     self.advance();
                     nested_types.push(self.parse_type_declaration());
+                } else if self.check(&Token::Symbol(Symbol::Function)) {
+                    self.advance();
+                    static_methods.push(self.parse_function_declaration());
                 } else {
                     let span = self.current_span();
-                    panic!("{}:{}: Expected type after let in project block",
+                    panic!("{}:{}: Expected type or 𝑓 after let in project block",
                         span.line, span.column);
                 }
             }
@@ -247,6 +251,7 @@ impl Parser {
             name,
             parameters,
             methods,
+            static_methods,
             nested_types,
             is_declared,
             implements,
@@ -256,7 +261,7 @@ impl Parser {
 
     fn parse_parameter(&mut self) -> Parameter {
         self.expect_token(&Token::Keyword(Keyword::Let));
-        self.expect_token(&Token::Keyword(Keyword::Value));
+        self.expect_token(&Token::Keyword(Keyword::Data));
         let name = self.expect_identifier();
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
 
@@ -357,7 +362,7 @@ impl Parser {
 
     fn parse_local_declaration(&mut self) -> Statement {
         self.expect_token(&Token::Keyword(Keyword::Let));
-        self.expect_token(&Token::Keyword(Keyword::Value));
+        self.expect_token(&Token::Keyword(Keyword::Data));
         let name = self.expect_identifier();
         self.expect_token(&Token::Symbol(Symbol::Brace(Bound::Opening)));
 
@@ -533,6 +538,7 @@ impl Parser {
                     Expression::ValueReference(name)
                 }
             }
+
             Token::Literal(Literal::String(StringLiteral::Plain(value))) => {
                 self.advance();
                 Expression::StringLiteral(value)
@@ -644,7 +650,7 @@ impl Parser {
     // === Helpers ===
 
     fn current_is_name(&self) -> bool {
-        matches!(self.current(), Token::Identifier(_) | Token::Keyword(Keyword::Value) | Token::Keyword(Keyword::Type) | Token::Keyword(Keyword::None))
+        matches!(self.current(), Token::Identifier(_) | Token::Keyword(Keyword::Data) | Token::Keyword(Keyword::Type) | Token::Keyword(Keyword::None))
     }
 
     pub(crate) fn current(&self) -> &Token {
@@ -690,9 +696,10 @@ impl Parser {
                 self.advance();
                 name
             }
-            Token::Keyword(Keyword::Value) => { self.advance(); "value".to_string() }
+            Token::Keyword(Keyword::Data) => { self.advance(); "data".to_string() }
             Token::Keyword(Keyword::Type) => { self.advance(); "type".to_string() }
             Token::Keyword(Keyword::None) => { self.advance(); "nothing".to_string() }
+            Token::Keyword(Keyword::SelfType) => { self.advance(); "Self".to_string() }
             other => {
                 let span = self.current_span();
                 panic!("{}:{}: Expected identifier, got {:?}", span.line, span.column, other);

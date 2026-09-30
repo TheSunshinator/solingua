@@ -3,7 +3,7 @@ let 𝑓 factorial {
     #scope(project) #implementation(full);
 
     parameters
-    let value n {
+    let data n {
         #return(Integer) #mutable(false) #scope(local) #implementation(full);
     }
 

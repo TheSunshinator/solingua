@@ -29,6 +29,8 @@ pub struct TypeChecker {
     blueprints: HashMap<String, BlueprintInfo>,
     singletons: Vec<String>,
     errors: Vec<String>,
+    /// The name of the current blueprint being checked (for resolving `Self`)
+    current_blueprint_name: Option<String>,
 }
 
 impl TypeChecker {
@@ -38,6 +40,16 @@ impl TypeChecker {
             blueprints: HashMap::new(),
             singletons: Vec::new(),
             errors: Vec::new(),
+            current_blueprint_name: None,
+        }
+    }
+
+    /// Resolve `Self` to the current blueprint name, or return the type as-is.
+    fn resolve_self(&self, type_name: &str) -> String {
+        if type_name == "Self" {
+            self.current_blueprint_name.clone().unwrap_or_else(|| "Self".to_string())
+        } else {
+            type_name.to_string()
         }
     }
 
@@ -111,6 +123,9 @@ impl TypeChecker {
             .collect();
 
         let mut methods = HashMap::new();
+        let resolve = |t: &str| -> String {
+            if t == "Self" { blueprint.name.clone() } else { t.to_string() }
+        };
         for method in &blueprint.methods {
             methods.insert(
                 method.name.clone(),
@@ -118,9 +133,9 @@ impl TypeChecker {
                     parameter_types: method
                         .parameters
                         .iter()
-                        .map(|p| p.type_name.clone())
+                        .map(|p| resolve(&p.type_name))
                         .collect(),
-                    return_type: method.return_type.clone(),
+                    return_type: resolve(&method.return_type),
                 },
             );
         }
@@ -135,6 +150,24 @@ impl TypeChecker {
                 is_declared: blueprint.is_declared,
             },
         );
+
+        // Register static methods as top-level functions, resolving Self → type name
+        for static_method in &blueprint.static_methods {
+            let resolved_return = if static_method.return_type == "Self" {
+                blueprint.name.clone()
+            } else {
+                static_method.return_type.clone()
+            };
+            let info = FunctionInfo {
+                parameter_types: static_method
+                    .parameters
+                    .iter()
+                    .map(|p| if p.type_name == "Self" { blueprint.name.clone() } else { p.type_name.clone() })
+                    .collect(),
+                return_type: resolved_return,
+            };
+            self.functions.insert(static_method.name.clone(), info);
+        }
 
         // Also register by simple name so nested types can be referenced directly
         if !prefix.is_empty() {
@@ -186,6 +219,9 @@ impl TypeChecker {
     }
 
     fn check_blueprint(&mut self, blueprint: &BlueprintDeclaration) {
+        let previous_blueprint = self.current_blueprint_name.take();
+        self.current_blueprint_name = Some(blueprint.name.clone());
+
         for method in &blueprint.methods {
             let mut scope: HashMap<String, VariableInfo> = HashMap::new();
 
@@ -219,8 +255,27 @@ impl TypeChecker {
                 );
             }
 
+            let resolved_return = self.resolve_self(&method.return_type);
             for statement in &method.body {
-                self.check_statement(statement, &mut scope, &method.return_type, &method.name);
+                self.check_statement(statement, &mut scope, &resolved_return, &method.name);
+            }
+        }
+
+        // Check static methods (no self, no instance fields — but Self still resolves)
+        for static_method in &blueprint.static_methods {
+            let mut scope: HashMap<String, VariableInfo> = HashMap::new();
+            for parameter in &static_method.parameters {
+                scope.insert(
+                    parameter.name.clone(),
+                    VariableInfo {
+                        type_name: parameter.type_name.clone(),
+                        variable: false,
+                    },
+                );
+            }
+            let resolved_return = self.resolve_self(&static_method.return_type);
+            for statement in &static_method.body {
+                self.check_statement(statement, &mut scope, &resolved_return, &static_method.name);
             }
         }
 
@@ -230,6 +285,8 @@ impl TypeChecker {
                 self.check_blueprint(nested);
             }
         }
+
+        self.current_blueprint_name = previous_blueprint;
     }
 
     fn check_statement(
@@ -483,7 +540,7 @@ impl TypeChecker {
                             }
                         }
                     }
-                    Some(func_info.return_type.clone())
+                    Some(self.resolve_self(&func_info.return_type))
                 } else {
                     self.errors.push(format!("Undefined function '{}'", name));
                     None

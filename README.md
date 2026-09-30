@@ -139,14 +139,14 @@ Grammar: `mutableLabel = "mutable(" , ("true" | "false") , ")" ;`
 
 Example:
 ```
-let value counter {
+let data counter {
   #return(Integer) #mutable(true) …
   initially 0
 }
 
 counter becomes counter + 1
 
-let value greeting {
+let data greeting {
   #return(String) #mutable(false) …
   initially "Hello world!"
 }
@@ -276,10 +276,10 @@ let 𝑓 main {
     #scope(project) #implementation(full);
     
     parameters
-    let value a {
+    let data a {
         #return(Integer) #mutable(false) #scope(local) #implementation(full)
     }
-    let value b {
+    let data b {
         #return(Integer) #mutable(false) #scope(local) #implementation(full);
     }
 
@@ -295,7 +295,7 @@ let 𝑓 main {
 
 Grammar:
 ```
-"let value " , identifier , "{" ,
+"let data " , identifier , "{" ,
   labels ,
   ("initially" , statement)
 "}"
@@ -303,11 +303,11 @@ Grammar:
 
 Example:
 ```
-let value greeting {
+let data greeting {
     #return(String) #mutable(false) #scope(local) #implementation(full)
     initially "Hello world!"
 }
-let value counter {
+let data counter {
     #return(Integer) #mutable(true) #scope(local) #implementation(full)
     initially 0
 }
@@ -485,7 +485,7 @@ let type Cat {
     #scope(project) #implementation(full)
     
     parameters
-    let value name {
+    let data name {
         #return(String) #mutable(false) #scope(instance) #implementation(full)
     }
     
@@ -504,7 +504,7 @@ let type Cat {
 Instantiation and usage:
 
 ```
-let value cat {
+let data cat {
     #return(Cat) #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
@@ -521,7 +521,7 @@ let type Animal {
     #scope(project) implementation(none)
     
     instance
-    let value name {
+    let data name {
         #return(String) #mutable(false) #scope(instance) #implementation(none)
     }
     let 𝑓 speak {
@@ -536,7 +536,7 @@ let type Cat {
     #scope(project) #implementation(full)
     
     parameters
-    let value name {
+    let data name {
         #return(String) #mutable(false) #scope(instance) #implementation(full) #contract(Animal)
     }
 
@@ -554,13 +554,80 @@ let type Cat {
 Instantiation and usage:
 
 ```
-let value cat {
+let data cat {
     #return(Animal) #generics⟨⟩ #extensible(closed) #visibility(public)
     #scope(local) #implementation(full)
     initially Cat("Krokmou")
 }
 cat → speak()
 printLine(cat → name)
+```
+
+### Self type
+
+Inside a type declaration, `Self` refers to the concrete implementing type. It can be used in return types and parameter types of both instance and project-scoped declarations.
+
+```
+let type Wrapper {
+    #return() #generic⟨T⟩ #extensible(open) #visibility(public)
+    #scope(project) #implementation(none);
+
+    instance
+    let 𝑓 transform {
+        #return(Self⟨T⟩) #generic⟨⟩ #extensible(open) #visibility(public)
+        #scope(instance) #implementation(none);
+
+        parameters
+        let data mapper {
+            #return(Self⟨T⟩) #mutable(false) #scope(local) #implementation(full);
+        }
+    }
+
+    project
+    let 𝑓 unit {
+        #return(Self⟨T⟩) #generic⟨T⟩ #visibility(public)
+        #scope(project) #implementation(none);
+
+        parameters
+        let data wrapped {
+            #return(T) #mutable(false) #scope(local) #implementation(full);
+        }
+    }
+}
+```
+
+When `Maybe` implements `Wrapper`, `Self` resolves to `Maybe`.
+
+### Project functions (static)
+
+The `project` section of a type can contain `let 𝑓` declarations for static (non-instance) functions. These don't receive a `self` parameter.
+
+With `#implementation(none)`, they act as **contracts** — child types must provide an implementation.
+
+```
+let type Box {
+    #return() #generic⟨⟩ #extensible(closed) #visibility(public)
+    #scope(project) #implementation(full);
+
+    parameters
+    let data content {
+        #return(String) #mutable(false) #scope(instance) #implementation(full);
+    }
+
+    project
+    let 𝑓 create {
+        #return(Box) #generic⟨⟩ #visibility(public)
+        #scope(project) #implementation(full);
+
+        parameters
+        let data text {
+            #return(String) #mutable(false) #scope(local) #implementation(full);
+        }
+
+        body
+        return Box(text);
+    }
+}
 ```
 
 ### Singletons
@@ -626,7 +693,7 @@ inherited(); ※ Option 3, keyword already exists
 
 #### Getter/Setter
 ```
-let value highScore {
+let data highScore {
   #…
   initially 0
   onGet {
@@ -658,7 +725,7 @@ Open questions:
 ```
 let 𝑓 isValidEmail {
   parameters
-  let value subject {
+  let data subject {
     #return(String) … #scope(project) …
   }
   body …
@@ -704,7 +771,7 @@ let enumeration Event {
 Let the compiler know that this value/function that returns a Boolean 
 must have a negated equivalent with the given name.
 ```
-let value isXmas {
+let data isXmas {
     #return(Boolean) … #negated("isNotXmas") …
     initially false
 }
@@ -734,7 +801,7 @@ printLine(isInvalid())
 - Result type
 - Variable wrapper for Rx
 ```
-let value whatever {
+let data whatever {
     #return(Mutable<String>) #mutable(false) …
     initially Mutable("")
 }

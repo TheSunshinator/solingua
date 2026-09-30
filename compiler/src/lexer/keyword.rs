@@ -13,9 +13,12 @@ pub enum Keyword {
     Subfolders,
     Package,
     // What construct
-    Value,
+    Data,
     Type,
     Singleton,
+    // Self type reference
+    SelfType,
+
     // parameters label
     Parameters,
     // Control flow
@@ -63,9 +66,10 @@ impl Keyword {
             "folder" => Some(Keyword::Folder),
             "subfolders" => Some(Keyword::Subfolders),
             "package" => Some(Keyword::Package),
-            "value" => Some(Keyword::Value),
+            "data" => Some(Keyword::Data),
             "type" => Some(Keyword::Type),
             "singleton" => Some(Keyword::Singleton),
+            "Self" => Some(Keyword::SelfType),
             "none" => Some(Keyword::None),
             "return" => Some(Keyword::Return),
             "parameters" => Some(Keyword::Parameters),
@@ -105,9 +109,10 @@ impl Keyword {
             Keyword::Folder => 6,
             Keyword::Subfolders => 10,
             Keyword::Package => 7,
-            Keyword::Value => 5,
+            Keyword::Data => 4,
             Keyword::Type => 4,
             Keyword::Singleton => 9,
+            Keyword::SelfType => 4,
             Keyword::None => 4,
             Keyword::Parameters => 10,
             Keyword::Return => 6,
@@ -182,7 +187,8 @@ mod tests {
     #[test]
     fn test_declaration_keywords() {
         assert_eq!(keyword_from("let"), Some(Keyword::Let));
-        assert_eq!(keyword_from("value"), Some(Keyword::Value));
+        assert_eq!(keyword_from("data"), Some(Keyword::Data));
+        assert_eq!(keyword_from("Self"), Some(Keyword::SelfType));
         assert_eq!(keyword_from("type"), Some(Keyword::Type));
         assert_eq!(keyword_from("singleton"), Some(Keyword::Singleton));
         assert_eq!(keyword_from("parameters"), Some(Keyword::Parameters));

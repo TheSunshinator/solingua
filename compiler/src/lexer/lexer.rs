@@ -44,6 +44,8 @@ impl Lexer {
             r"|[0-9A-F]+₁₆",              // hex integers (FF₁₆)
             r"|[01]+₂",                    // binary integers (1010₂)
             r"|\d+\.\d+",                  // float literals (3.14)
+            r"|∃\?",                       // ∃? (MaybeType)
+            r"|[∃∄]",                       // ∃ (Exists) or ∄ (NotExists)
             r"|[a-zA-Z_][a-zA-Z0-9_]*",   // words (identifiers/keywords)
             r"|\d+",                       // integers
             r"|[><=≥≤≠(){}\[\],+\-×/;#|&𝑓⟨⟩∧∨¬→ℕ]",  // single-char symbols and operators
@@ -109,6 +111,12 @@ impl Lexer {
             if let Ok(value) = chunk.parse::<f64>() {
                 return Token::Literal(Literal::Float(value));
             }
+        }
+
+        // Unicode identifiers: ∃?, ∃, ∄
+        match chunk {
+            "∃?" | "∃" | "∄" => return Token::Identifier(chunk.to_string()),
+            _ => {}
         }
 
         let chars: Vec<char> = chunk.chars().collect();
@@ -305,9 +313,9 @@ mod tests {
 
     #[test]
     fn test_declaration() {
-        let tokens = tokenize("let value greeting");
+        let tokens = tokenize("let data greeting");
         assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
-        assert_eq!(tokens[1], Token::Keyword(Keyword::Value));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Data));
         assert_eq!(tokens[2], Token::Identifier("greeting".to_string()));
     }
 
@@ -331,9 +339,9 @@ mod tests {
 
     #[test]
     fn test_full_value_declaration() {
-        let tokens = tokenize("let value counter { #return(Integer) #mutable(false) #scope(local) #implementation(full); initially 0 }");
+        let tokens = tokenize("let data counter { #return(Integer) #mutable(false) #scope(local) #implementation(full); initially 0 }");
         assert_eq!(tokens[0], Token::Keyword(Keyword::Let));
-        assert_eq!(tokens[1], Token::Keyword(Keyword::Value));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Data));
         assert_eq!(tokens[2], Token::Identifier("counter".to_string()));
         assert_eq!(tokens[3], Token::Symbol(Symbol::Brace(Bound::Opening)));
         assert_eq!(tokens[4], Token::Symbol(Symbol::Label));
@@ -562,6 +570,51 @@ mod tests {
             Token::Literal(Literal::Integer(1)),
             Token::EndOfFile,
         ]);
+    }
+
+    // === Unicode identifier tests ===
+
+    #[test]
+    fn test_maybe_type_identifier() {
+        assert_eq!(tokenize("∃?"), vec![
+            Token::Identifier("∃?".to_string()),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_exists_identifier() {
+        assert_eq!(tokenize("∃"), vec![
+            Token::Identifier("∃".to_string()),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_not_exists_identifier() {
+        assert_eq!(tokenize("∄"), vec![
+            Token::Identifier("∄".to_string()),
+            Token::EndOfFile,
+        ]);
+    }
+
+    #[test]
+    fn test_exists_constructor() {
+        let tokens = tokenize("∃(42)");
+        assert_eq!(tokens[0], Token::Identifier("∃".to_string()));
+        assert_eq!(tokens[1], Token::Symbol(Symbol::Parentheses(Bound::Opening)));
+        assert_eq!(tokens[2], Token::Literal(Literal::Integer(42)));
+        assert_eq!(tokens[3], Token::Symbol(Symbol::Parentheses(Bound::Closing)));
+    }
+
+    #[test]
+    fn test_maybe_type_in_return() {
+        let tokens = tokenize("#return(∃?)");
+        assert_eq!(tokens[0], Token::Symbol(Symbol::Label));
+        assert_eq!(tokens[1], Token::Keyword(Keyword::Return));
+        assert_eq!(tokens[2], Token::Symbol(Symbol::Parentheses(Bound::Opening)));
+        assert_eq!(tokens[3], Token::Identifier("∃?".to_string()));
+        assert_eq!(tokens[4], Token::Symbol(Symbol::Parentheses(Bound::Closing)));
     }
 
     #[test]

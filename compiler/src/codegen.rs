@@ -146,6 +146,10 @@ impl CodeGenerator {
             for method in &blueprint.methods {
                 self.emit_method(&blueprint.name, method);
             }
+            // Static methods are emitted as Type_methodName (no self parameter)
+            for static_method in &blueprint.static_methods {
+                self.emit_function(static_method);
+            }
         }
 
         for nested in &blueprint.nested_types {
@@ -157,6 +161,11 @@ impl CodeGenerator {
     fn collect_strings_from_blueprint(&mut self, blueprint: &BlueprintDeclaration) {
         for method in &blueprint.methods {
             for statement in &method.body {
+                self.collect_strings(statement);
+            }
+        }
+        for static_method in &blueprint.static_methods {
+            for statement in &static_method.body {
                 self.collect_strings(statement);
             }
         }
